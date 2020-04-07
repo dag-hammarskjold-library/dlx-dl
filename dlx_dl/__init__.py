@@ -10,16 +10,17 @@ from mongomock import MongoClient as MockClient
 ###
 
 parser = ArgumentParser(prog='dlx-dl')
-parser.add_argument('--connect', required=True, help='MDB connection string')
+parser.add_argument('--connect', required=True, help='dlx MDB connection string')
 parser.add_argument('--type', required=True, choices=['bib', 'auth'])
 parser.add_argument('--modified_from', help='ISO datetime (UTC)')
 parser.add_argument('--modified_to', help='ISO datetime (UTC)')
-parser.add_argument('--list', help='file with list of IDs')
+parser.add_argument('--list', help='file with list of IDs (max 1000)')
 parser.add_argument('--id', help='a single record ID')
 parser.add_argument('--output_file', help='write XML as batch to this file')
 parser.add_argument('--api_key', help='UNDL-issued api key')
 parser.add_argument('--email', help='disabled')
-parser.add_argument('--log', help='MDB connection string to write data to')
+parser.add_argument('--log', help='log MDB connection string')
+parser.add_argument('--preview', action='store_true', help='list records that meet criteria and exit (boolean)')
 
 ###
 
@@ -58,11 +59,20 @@ def main():
     elif args.list:
         with open(args.list, 'r') as f:
             ids = [int(line) for line in f.readlines()]
-            warn('Very long lists of IDs can use all the memory on the database server')
+            
+            if len(ids) > 1000:
+                raise Exception('Max 1000 IDs')
+                
             rset = cls.from_query({'_id': {'$in': ids}})
     else:
         raise Exception('One of the arguments --id --modified_from --list is required')
-    
+        
+    if args.preview:
+        for record in rset:
+            print('\t'.join([str(record.id), str(record.updated)]))
+            
+        return
+
     if args.output_file:
         if args.output_file.lower() == 'stdout':
             out = sys.stdout
@@ -81,8 +91,6 @@ def main():
         process_auths(rset, out, args.api_key, args.email, log)
     
     out.write('</collection>')
-    
-    return LOG_DATA
     
 ###
 
@@ -186,7 +194,7 @@ def post(rtype, rid, xml, api_key, email, log):
         log.insert_one(logdata)
     
     # clean for JSON serialization
-    del logdata['_id'] # pymongo adds the _id key to the dict on insert??
+    logdata.pop('_id', None) # pymongo adds the _id key to the dict on insert??
     logdata['time'] = logdata['time'].strftime('%Y-%m-%d %H:%M:%S')
     
     LOG_DATA.append(logdata)
