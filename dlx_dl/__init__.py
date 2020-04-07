@@ -12,8 +12,8 @@ from mongomock import MongoClient as MockClient
 parser = ArgumentParser(prog='dlx-dl')
 parser.add_argument('--connect', required=True, help='MDB connection string')
 parser.add_argument('--type', required=True, choices=['bib', 'auth'])
-parser.add_argument('--modified_from', help='ISO datetime')
-parser.add_argument('--modified_to', help='ISO datetime')
+parser.add_argument('--modified_from', help='ISO datetime (UTC)')
+parser.add_argument('--modified_to', help='ISO datetime (UTC)')
 parser.add_argument('--list', help='file with list of IDs')
 parser.add_argument('--id', help='a single record ID')
 parser.add_argument('--output_file', help='write XML as batch to this file')
@@ -26,14 +26,13 @@ parser.add_argument('--log', help='MDB connection string to write data to')
 API_URL = 'https://digitallibrary.un.org/api/v1/record/'
 LOG_DB_NAME = 'DLX_DL_log'
 LOG_COLLECTION_NAME = 'log'
+LOG_DATA = []
 
 ###
 
 def main():
     args = parser.parse_args()
     DB.connect(args.connect)
-    
-    print(Bib.match_id(1))
     
     ## process arguments
     
@@ -82,6 +81,8 @@ def main():
         process_auths(rset, out, args.api_key, args.email, log)
     
     out.write('</collection>')
+    
+    return LOG_DATA
     
 ###
 
@@ -187,6 +188,8 @@ def post(rtype, rid, xml, api_key, email, log):
     # clean for JSON serialization
     del logdata['_id'] # pymongo adds the _id key to the dict on insert??
     logdata['time'] = logdata['time'].strftime('%Y-%m-%d %H:%M:%S')
+    
+    LOG_DATA.append(logdata)
     
     print(json.dumps(logdata))
 

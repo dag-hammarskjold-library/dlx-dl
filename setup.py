@@ -8,7 +8,7 @@ with open("requirements.txt") as f:
     requirements = list(filter(None,f.read().split('\n')))
 
 setup(
-    name = 'dlx-dl',
+    name = 'dlx_dl',
     version = '0.1',
     url = 'http://github.com/dag-hammarskjold-library/dlx',
     author = 'United Nations Dag Hammarskjöld Library',
@@ -23,7 +23,7 @@ setup(
     python_requires = '>=3.3',
     entry_points = {
         'console_scripts': [
-            'dlx-dl=script.dlx_dl:main'
+            'dlx-dl=dlx_dl:main'
         ]
     }
 )
