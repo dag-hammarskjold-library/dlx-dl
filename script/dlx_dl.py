@@ -9,17 +9,17 @@ from mongomock import MongoClient as MockClient
 
 ###
 
-parser = ArgumentParser()
-parser.add_argument('--connect', required=True)                         # MDB connection string
+parser = ArgumentParser(prog='dlx-dl')
+parser.add_argument('--connect', required=True, help='MDB connection string')
 parser.add_argument('--type', required=True, choices=['bib', 'auth'])
-parser.add_argument('--modified_from')                                  # ISO datetime
-parser.add_argument('--modified_to')                                    # ISO datetime
-parser.add_argument('--list')                                           # file with list of IDs
-parser.add_argument('--id')                                             # a single ID
-parser.add_argument('--output_file')                                    # write XML as batch to this file
-parser.add_argument('--api_key')                                        # DL API key
-parser.add_argument('--email')                                          # disabled
-parser.add_argument('--log')                                            # MDB connection string
+parser.add_argument('--modified_from', help='ISO datetime')
+parser.add_argument('--modified_to', help='ISO datetime')
+parser.add_argument('--list', help='file with list of IDs')
+parser.add_argument('--id', help='a single record ID')
+parser.add_argument('--output_file', help='write XML as batch to this file')
+parser.add_argument('--api_key', help='UNDL-issued api key')
+parser.add_argument('--email', help='disabled')
+parser.add_argument('--log', help='MDB connection string to write data to')
 
 ###
 
