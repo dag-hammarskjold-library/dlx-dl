@@ -31,7 +31,10 @@ LOG_DATA = []
 
 ###
 
-def main():
+def main(**kwargs):
+    if kwargs:
+        sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
+    
     args = parser.parse_args()
     DB.connect(args.connect)
     
