@@ -37,7 +37,7 @@ dlx_dl.main(connect='<connection_string>', type='bib', id=1)
 * Required arguments are `--connect` and `--type`, and one of `--id`, `--list`, or `--modified_from` 
 * If you supply `--output_file`, an XML file of all the records meeting the criteria will be written to that path
 * if you supply `--api_key`, each file that meets the criteria will be written to DL in "insertorreplace" mode
-* If you supply `--log`, a log will be written to the specified database in a collection called "log".
+* If you supply `--log`, a log will be written to the specified database in a collection called "dlx_dl_log".
 * If you run the program as a function, you can access the log data through the module's global variable `LOG_DATA`
 
 ### Examples

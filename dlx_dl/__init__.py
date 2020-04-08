@@ -25,8 +25,7 @@ parser.add_argument('--preview', action='store_true', help='list records that me
 ###
 
 API_URL = 'https://digitallibrary.un.org/api/v1/record/'
-LOG_DB_NAME = 'DLX_DL_log'
-LOG_COLLECTION_NAME = 'log'
+LOG_COLLECTION_NAME = 'dlx_dl_log'
 LOG_DATA = []
 
 ###
@@ -44,10 +43,17 @@ def main(**kwargs):
         cstr = args.log
         
         if cstr[0:9] == 'mongomock':
-            cstr = 'mongodb://.../?authSource=' + LOG_DB_NAME
-            log = MockClient(cstr)[LOG_DB_NAME][LOG_COLLECTION_NAME]
+            cstr = 'mongodb://.../?authSource=dlx_dl_dummy'
+            log = MockClient(cstr)['dlx_dl_dummy'][LOG_COLLECTION_NAME]
         else:
-            log = MongoClient(cstr)[LOG_DB_NAME][LOG_COLLECTION_NAME]
+            match = re.search(r'\?authSource=([\w]+)', cstr)
+
+            if match:
+                log_db_name = match.group(1)
+            else:
+                raise Exception('Log DB name not found')
+
+            log = MongoClient(cstr)[log_db_name][LOG_COLLECTION_NAME]
     else:
         log = None
     
@@ -94,6 +100,8 @@ def main(**kwargs):
         process_auths(rset, out, args.api_key, args.email, log)
     
     out.write('</collection>')
+    
+    return
     
 ###
 
