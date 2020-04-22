@@ -1,6 +1,6 @@
 import os, sys, re, requests, json
 from warnings import warn
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from argparse import ArgumentParser
 from dlx import DB, Config
 from dlx.marc import Bib, BibSet, Auth, AuthSet
@@ -14,6 +14,7 @@ parser.add_argument('--connect', required=True, help='dlx MDB connection string'
 parser.add_argument('--type', required=True, choices=['bib', 'auth'])
 parser.add_argument('--modified_from', help='ISO datetime (UTC)')
 parser.add_argument('--modified_to', help='ISO datetime (UTC)')
+parser.add_argument('--modified_within', help='Seconds')
 parser.add_argument('--list', help='file with list of IDs (max 1000)')
 parser.add_argument('--id', help='a single record ID')
 parser.add_argument('--output_file', help='write XML as batch to this file')
@@ -61,6 +62,8 @@ def main(**kwargs):
 
     if args.id:
         rset = cls.from_query({'_id': int(args.id)})
+    elif args.modified_within:
+        rset = cls.from_query({'updated': {'$gte': datetime.utcnow() - timedelta(seconds=int(args.modified_within))}})
     elif args.modified_from and args.modified_to:
         rset = cls.from_query({'updated': {'$gte': datetime.fromisoformat(args.modified_from), '$lt': datetime.fromisoformat(args.modified_to)}})
     elif args.modified_from:
@@ -74,7 +77,7 @@ def main(**kwargs):
                 
             rset = cls.from_query({'_id': {'$in': ids}})
     else:
-        raise Exception('One of the arguments --id --modified_from --list is required')
+        raise Exception('One of the arguments --id --modified_from --modified_within --list is required')
         
     if args.preview:
         for record in rset:
