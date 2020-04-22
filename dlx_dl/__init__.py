@@ -86,7 +86,7 @@ def main(**kwargs):
         if args.output_file.lower() == 'stdout':
             out = sys.stdout
         else:
-            out = open(args.output_file, 'w')
+            out = open(args.output_file, 'w', encoding='utf-8')
     else:
         out = open(os.devnull, 'w')
 
@@ -182,15 +182,16 @@ def _035(record):
 def post(rtype, rid, xml, api_key, email, log):
     headers = {
         'Authorization': 'Token ' + api_key,
-        'Content-Type': 'application/xml'
+        'Content-Type': 'application/xml; charset=utf-8',
+        
     }
     
     params = {
         'mode': 'insertorreplace',
-        #'callback_email': email
+        'callback_email': email
     }
-    
-    response = requests.post(API_URL, params=params, headers=headers, data=xml)
+
+    response = requests.post(API_URL, params=params, headers=headers, data=xml.encode('utf-8'))
      
     logdata = {
         'time': datetime.now(timezone.utc), #.strftime('%Y-%m-%d %H:%M:%S'), 
