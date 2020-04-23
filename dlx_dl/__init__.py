@@ -1,5 +1,6 @@
 import os, sys, re, requests, json
 from warnings import warn
+from urllib.parse import urlparse, urlunparse, quote
 from datetime import datetime, timezone, timedelta
 from argparse import ArgumentParser
 from dlx import DB, Config
@@ -15,6 +16,7 @@ parser.add_argument('--type', required=True, choices=['bib', 'auth'])
 parser.add_argument('--modified_from', help='ISO datetime (UTC)')
 parser.add_argument('--modified_to', help='ISO datetime (UTC)')
 parser.add_argument('--modified_within', help='Seconds')
+parser.add_argument('--modified_since_log', action='store_true', help='boolean')
 parser.add_argument('--list', help='file with list of IDs (max 1000)')
 parser.add_argument('--id', help='a single record ID')
 parser.add_argument('--output_file', help='write XML as batch to this file')
@@ -26,8 +28,10 @@ parser.add_argument('--preview', action='store_true', help='list records that me
 ###
 
 API_URL = 'https://digitallibrary.un.org/api/v1/record/'
+EXPORT_TIME = datetime.now(timezone.utc)
 LOG_COLLECTION_NAME = 'dlx_dl_log'
 LOG_DATA = []
+WHITELIST = ['digitization.s3.amazonaws.com', 'undl-js.s3.amazonaws.com', 'un-maps.s3.amazonaws.com', 'dag.un.org']
 
 ###
 
@@ -37,6 +41,7 @@ def main(**kwargs):
     
     args = parser.parse_args()
     DB.connect(args.connect)
+    args.email = None
     
     ## process arguments
     
@@ -62,6 +67,9 @@ def main(**kwargs):
 
     if args.id:
         rset = cls.from_query({'_id': int(args.id)})
+    elif args.modified_since_log:
+        last_export = next(log.aggregate([{'$sort': {'export_start' : -1}}]))['export_start']
+        rset = cls.from_query({'updated': {'$gte': last_export}})
     elif args.modified_within:
         rset = cls.from_query({'updated': {'$gte': datetime.utcnow() - timedelta(seconds=int(args.modified_within))}})
     elif args.modified_from and args.modified_to:
@@ -82,7 +90,7 @@ def main(**kwargs):
     if args.preview:
         for record in rset:
             print('\t'.join([str(record.id), str(record.updated)]))
-            
+
         return
 
     if args.output_file:
@@ -113,6 +121,37 @@ def process_bibs(rset, out, api_key, email, log):
         bib.delete_field('001')
         bib.delete_field('005')
         bib = _035(bib)
+        
+        place = 0
+        
+        for field in bib.get_fields('856'):
+            url = field.get_value('u')
+            parsed = urlparse(url)
+            
+            if parsed.netloc in WHITELIST:
+                bib.set('FFT', 'a', urlunparse([parsed.scheme, parsed.netloc, quote(parsed.path), None, None, None]), address=['+'])
+                old_fn = url.split('/')[-1] 
+                new_fn = clean_fn(old_fn)
+                bib.set('FFT', 'n', new_fn, address=[place])
+                
+                if parsed.path.split('.')[-1] == 'tiff':
+                    bib.set('FFT', 'r', 'tiff', address=[place])
+                    
+                lang = field.get_value('3')
+                
+                if lang:
+                    lang = 'English' if lang == 'Eng' else lang
+                    bib.set('FFT', 'd', lang, address=[place])
+                    
+                fmt = field.get_value('q')
+                
+                if fmt:
+                    bib.set('FFT', 'f', fmt, address=[place])
+                
+                bib.fields.remove(field)
+                
+                place += 1
+
         bib.set('980', 'a', 'BIB')
         
         xml = bib.to_xml(xref_prefix='(DHLAUTH)')
@@ -181,6 +220,12 @@ def _035(record):
     record.set('035', 'a', pre + str(record.id), address=['+'])
     
     return record
+    
+def clean_fn(fn):
+    parts = fn.split('.')
+    fn = '-'.join(parts[:-1]) + '.' + parts[-1]
+    fn = fn.translate(str.maketrans(' [];', '_^^&'))
+    return fn
   
 def post(rtype, rid, xml, api_key, email, log):
     headers = {
@@ -197,10 +242,11 @@ def post(rtype, rid, xml, api_key, email, log):
     response = requests.post(API_URL, params=params, headers=headers, data=xml.encode('utf-8'))
      
     logdata = {
-        'time': datetime.now(timezone.utc), #.strftime('%Y-%m-%d %H:%M:%S'), 
+        'export_start': EXPORT_TIME,
+        'time': datetime.now(timezone.utc),
         'record_type': rtype, 
         'record_id': rid, 
-        'response_code': str(response.status_code), 
+        'response_code': response.status_code, 
         'response_text': response.text.replace('\n', ''),
         'xml': xml
     }
@@ -210,7 +256,8 @@ def post(rtype, rid, xml, api_key, email, log):
     
     # clean for JSON serialization
     logdata.pop('_id', None) # pymongo adds the _id key to the dict on insert??
-    logdata['time'] = logdata['time'].strftime('%Y-%m-%d %H:%M:%S')
+    logdata['export_start'] = str(logdata['export_start'])
+    logdata['time'] = str(logdata['time'])
     
     LOG_DATA.append(logdata)
     
