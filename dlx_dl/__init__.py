@@ -28,10 +28,18 @@ parser.add_argument('--preview', action='store_true', help='list records that me
 ###
 
 API_URL = 'https://digitallibrary.un.org/api/v1/record/'
-EXPORT_TIME = datetime.now(timezone.utc)
 LOG_COLLECTION_NAME = 'dlx_dl_log'
-LOG_DATA = []
 WHITELIST = ['digitization.s3.amazonaws.com', 'undl-js.s3.amazonaws.com', 'un-maps.s3.amazonaws.com', 'dag.un.org']
+AUTH_TYPE = {
+    '100': 'PERSONAL',
+    '110': 'CORPORATE',
+    '111': 'MEETING',
+    '130': 'UNIFORM',
+    '150': 'TOPICAL',
+    '151': 'GEOGRAPHIC',
+    '190': 'SYMBOL',
+    '191': 'AGENDA'
+}
 
 ###
 
@@ -42,7 +50,7 @@ def main(**kwargs):
     args = parser.parse_args()
     DB.connect(args.connect)
     args.email = None
-    
+
     ## process arguments
     
     if args.api_key and args.log:
@@ -117,6 +125,8 @@ def main(**kwargs):
 ###
 
 def process_bibs(rset, out, api_key, email, log):
+    export_start = datetime.now(timezone.utc)
+    
     for bib in rset:
         bib.delete_field('001')
         bib.delete_field('005')
@@ -159,20 +169,11 @@ def process_bibs(rset, out, api_key, email, log):
         out.write(xml)
         
         if api_key:
-            post('bib', bib.id, xml, api_key, email, log)
+            post('bib', bib.id, xml, api_key, email, log, export_start)
            
 def process_auths(rset, out, api_key, email, log):
-    AUTH_TYPE = {
-        '100': 'PERSONAL',
-        '110': 'CORPORATE',
-        '111': 'MEETING',
-        '130': 'UNIFORM',
-        '150': 'TOPICAL',
-        '151': 'GEOGRAPHIC',
-        '190': 'SYMBOL',
-        '191': 'AGENDA'
-    }
-    
+    export_start = datetime.now(timezone.utc)
+      
     for auth in rset:
         atag = auth.heading_field.tag
         
@@ -198,7 +199,7 @@ def process_auths(rset, out, api_key, email, log):
         out.write(xml)
                     
         if api_key:
-            post('auth', auth.id, xml, api_key, email, log)
+            post('auth', auth.id, xml, api_key, email, log, export_start)
             
 def _035(record):
     place = 0
@@ -227,11 +228,10 @@ def clean_fn(fn):
     fn = fn.translate(str.maketrans(' [];', '_^^&'))
     return fn
   
-def post(rtype, rid, xml, api_key, email, log):
+def post(rtype, rid, xml, api_key, email, log, started_at):
     headers = {
         'Authorization': 'Token ' + api_key,
         'Content-Type': 'application/xml; charset=utf-8',
-        
     }
     
     params = {
@@ -242,7 +242,7 @@ def post(rtype, rid, xml, api_key, email, log):
     response = requests.post(API_URL, params=params, headers=headers, data=xml.encode('utf-8'))
      
     logdata = {
-        'export_start': EXPORT_TIME,
+        'export_start': started_at,
         'time': datetime.now(timezone.utc),
         'record_type': rtype, 
         'record_id': rid, 
@@ -258,8 +258,6 @@ def post(rtype, rid, xml, api_key, email, log):
     logdata.pop('_id', None) # pymongo adds the _id key to the dict on insert??
     logdata['export_start'] = str(logdata['export_start'])
     logdata['time'] = str(logdata['time'])
-    
-    LOG_DATA.append(logdata)
     
     print(json.dumps(logdata))
 

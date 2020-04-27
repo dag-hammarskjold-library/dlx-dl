@@ -58,14 +58,3 @@ $ dlx-dl --connect=<connection_string> --type=bib --id=1000000 --api_key=<api_ke
 ```bash
 $ dlx-dl --connect=<connection_string> --type=bib --modified_within=3600 --api_key=<api_key> --log=<connection_string>
 ```
-
-> Capture log data from Python
-```python
-import dlx_dl
-
-dlx_dl.main(connect='<connection_string>', type='bib', modified_from='2020-04-06Z00:00', api_key='<api_key>')
-
-data = dlx_dl.LOG_DATA
-
-# do something with log data
-```
