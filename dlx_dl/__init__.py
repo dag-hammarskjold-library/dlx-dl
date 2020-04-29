@@ -1,6 +1,6 @@
 import os, sys, re, requests, json
 from warnings import warn
-from urllib.parse import urlparse, urlunparse, quote
+from urllib.parse import urlparse, urlunparse, quote, unquote
 from datetime import datetime, timezone, timedelta
 from argparse import ArgumentParser
 from dlx import DB, Config
@@ -49,7 +49,7 @@ def main(**kwargs):
     
     args = parser.parse_args()
     DB.connect(args.connect)
-    args.email = None
+    #args.email = None
 
     ## process arguments
     
@@ -139,7 +139,12 @@ def process_bibs(rset, out, api_key, email, log):
             parsed = urlparse(url)
             
             if parsed.netloc in WHITELIST:
-                bib.set('FFT', 'a', urlunparse([parsed.scheme, parsed.netloc, quote(parsed.path), None, None, None]), address=['+'])
+                url_path = parsed.path.rstrip()
+                
+                if unquote(url_path) == url_path:
+                    url_path = quote(url_path)
+                
+                bib.set('FFT', 'a', urlunparse([parsed.scheme, parsed.netloc, url_path, None, None, None]), address=['+'])
                 old_fn = url.split('/')[-1] 
                 new_fn = clean_fn(old_fn)
                 bib.set('FFT', 'n', new_fn, address=[place])
