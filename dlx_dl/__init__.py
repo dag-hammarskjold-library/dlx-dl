@@ -108,8 +108,8 @@ def main(**kwargs):
         with open(args.list, 'r') as f:
             ids = [int(line) for line in f.readlines()]
             
-            if len(ids) > 1000:
-                raise Exception('Max 1000 IDs')
+            if len(ids) > 3000:
+                raise Exception('Max 3000 IDs')
                 
             rset = cls.from_query({'_id': {'$in': ids}})
     else:
@@ -268,7 +268,7 @@ def _get_recordset(cls, date_from, date_to=None):
     fft_symbols = _new_file_symbols(date_from, date_to)
     
     if len(fft_symbols) > 1000:
-        raise Exception('that\'s many file symbols too look up, sorry :(')
+        raise Exception('that\'s too many file symbols to look up, sorry :(')
     
     criteria = SON({'$gte': date_from})
     
@@ -296,7 +296,7 @@ def _new_file_symbols(date_from, date_to=None):
             if idx['type'] == 'symbol' and idx['value'] != '' and idx['value'] != ' ' and idx['value'] != '***': # note: clean these up in db
                 fft_symbols.append(idx['value'])
                 
-    return fft_symbols
+    return list(set(fft_symbols))
     
 def _fft_from_files(bib):
     symbols = bib.get_values('191', 'a')
