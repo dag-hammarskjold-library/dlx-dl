@@ -24,6 +24,8 @@ parser.add_argument('--id', help='a single record ID')
 parser.add_argument('--output_file', help='write XML as batch to this file')
 parser.add_argument('--api_key', help='UNDL-issued api key')
 parser.add_argument('--email', help='disabled')
+parser.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.")
+parser.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.')
 parser.add_argument('--log', help='log MDB connection string')
 parser.add_argument('--files_only', action='store_true', help='only export records with new files')
 parser.add_argument('--preview', action='store_true', help='list records that meet criteria and exit (boolean)')
@@ -143,9 +145,9 @@ def main(**kwargs):
     out.write('<collection>')
     
     if args.type == 'bib':
-        process_bibs(rset, out, args.api_key, args.email, log, args.files_only)
+        process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only)
     else:
-        process_auths(rset, out, args.api_key, args.email, log)
+        process_auths(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log)
     
     out.write('</collection>')
     
@@ -153,7 +155,7 @@ def main(**kwargs):
     
 ###
 
-def process_bibs(rset, out, api_key, email, log, files_only):
+def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only):
     export_start = datetime.now(timezone.utc)
     
     for bib in rset:
@@ -173,9 +175,9 @@ def process_bibs(rset, out, api_key, email, log, files_only):
         out.write(xml)
         
         if api_key:
-            post('bib', bib.id, xml, api_key, email, log, export_start)
+            post('bib', bib.id, xml, api_key, email, callback_url, nonce_key, log, export_start)
            
-def process_auths(rset, out, api_key, email, log):
+def process_auths(rset, out, api_key, email, callback_url, nonce_key, log):
     export_start = datetime.now(timezone.utc)
       
     for auth in rset:
@@ -203,7 +205,7 @@ def process_auths(rset, out, api_key, email, log):
         out.write(xml)
                     
         if api_key:
-            post('auth', auth.id, xml, api_key, email, log, export_start)
+            post('auth', auth.id, xml, api_key, email, callback_url, nonce_key, log, export_start)
             
 def _035(record):
     place = 0
@@ -350,15 +352,23 @@ def encode_fn(symbols, language, extension):
 
     return '{}-{}.{}'.format('&'.join(xsymbols), language.upper(), extension)
   
-def post(rtype, rid, xml, api_key, email, log, started_at):
+def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, started_at):
     headers = {
         'Authorization': 'Token ' + api_key,
         'Content-Type': 'application/xml; charset=utf-8',
     }
+
+    nonce = {
+        'type': rtype,
+        'id': rid,
+        'key': nonce_key
+    }
     
     params = {
         'mode': 'insertorreplace',
-        'callback_email': email
+        'callback_email': email,
+        'callback_url': callback_url,
+        'nonce': json.dumps(nonce)
     }
 
     response = requests.post(API_URL, params=params, headers=headers, data=xml.encode('utf-8'))
