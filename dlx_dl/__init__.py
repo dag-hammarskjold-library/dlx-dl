@@ -368,7 +368,7 @@ def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, started_
         'mode': 'insertorreplace',
         'callback_email': email,
         'callback_url': callback_url,
-        'nonce': nonce
+        'nonce': json.dumps(nonce)
     }
 
     response = requests.post(API_URL, params=params, headers=headers, data=xml.encode('utf-8'))
