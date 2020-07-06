@@ -184,7 +184,7 @@ def process_auths(rset, out, api_key, email, callback_url, nonce_key, log):
         atag = auth.heading_field.tag
         
         if atag == '150':
-            warn('Can\'t update thesaurus terms at this time: record ' + auth.id)
+            warn('Can\'t update thesaurus terms at this time: record {}'.format(auth.id))
             continue
     
         auth.delete_field('001')
