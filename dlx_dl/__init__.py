@@ -229,7 +229,7 @@ def _035(record):
     return record
     
 def _856(bib):
-    place = 0
+    place = len(bib.get_fields('FFT'))
     
     for field in bib.get_fields('856'):
         url = field.get_value('u')
@@ -242,7 +242,7 @@ def _856(bib):
                 url_path = quote(url_path)
             
             bib.set('FFT', 'a', urlunparse([parsed.scheme, parsed.netloc, url_path, None, None, None]), address=['+'])
-            old_fn = url.split('/')[-1] 
+            old_fn = url.split('/')[-1]
             new_fn = clean_fn(old_fn)
             bib.set('FFT', 'n', new_fn, address=[place])
             
