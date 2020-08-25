@@ -75,6 +75,7 @@ def main(**kwargs):
         if cstr[0:9] == 'mongomock':
             cstr = 'mongodb://.../?authSource=dlx_dl_dummy'
             log = MockClient(cstr)['dlx_dl_dummy'][LOG_COLLECTION_NAME]
+            blacklist = MockClient(cstr)['dlx_dl_dummy']['blacklist']
         else:
             match = re.search(r'\?authSource=([\w]+)', cstr)
 
@@ -84,6 +85,7 @@ def main(**kwargs):
                 raise Exception('Log DB name not found')
 
             log = MongoClient(cstr)[log_db_name][LOG_COLLECTION_NAME]
+            blacklist = MongoClient(cstr)[log_db_name]['blacklist']
     else:
         log = None
     
@@ -145,7 +147,8 @@ def main(**kwargs):
     out.write('<collection>')
     
     if args.type == 'bib':
-        process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only)
+        # Adding blacklist
+        process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only, blacklist)
     else:
         process_auths(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log)
     
@@ -155,13 +158,18 @@ def main(**kwargs):
     
 ###
 
-def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only):
+def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, connect):
     export_start = datetime.now(timezone.utc)
     
     for bib in rset:
         _fft_from_files(bib)
         
         if files_only and not bib.get_fields('FFT'):
+            continue
+
+        this_191_a = bib.get_value('191','a')
+        this_count = blacklist.count_documents({"symbol":"{}".format(this_191_a)}, limit=1)
+        if this_count > 0:
             continue
         
         bib.delete_field('001')
