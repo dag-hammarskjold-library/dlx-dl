@@ -158,7 +158,7 @@ def main(**kwargs):
     
 ###
 
-def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, connect):
+def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, connect, blacklist):
     export_start = datetime.now(timezone.utc)
     
     for bib in rset:
