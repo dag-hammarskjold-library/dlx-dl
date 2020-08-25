@@ -168,7 +168,7 @@ def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_
             continue
 
         this_191_a = bib.get_value('191','a')
-        this_count = blacklist.countDocuments('{"symbol":"{}"}'.format(this_191_a))
+        this_count = blacklist.count_documents({"symbol":"{}".format(this_191_a)}, limit=1)
         if this_count > 0:
             continue
         
