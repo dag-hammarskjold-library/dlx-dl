@@ -21,20 +21,21 @@ parser.add_argument('--modified_within', help='Seconds')
 parser.add_argument('--modified_since_log', action='store_true', help='boolean')
 parser.add_argument('--list', help='file with list of IDs (max 1000)')
 parser.add_argument('--id', help='a single record ID')
-parser.add_argument('--output_file', help='write XML as batch to this file')
+parser.add_argument('--output_file', help='write XML as batch to this file. use "STDOUT" to print in console')
 parser.add_argument('--api_key', help='UNDL-issued api key')
 parser.add_argument('--email', help='disabled')
 parser.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.")
 parser.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.')
-parser.add_argument('--log', help='log MDB connection string')
 parser.add_argument('--files_only', action='store_true', help='only export records with new files')
 parser.add_argument('--preview', action='store_true', help='list records that meet criteria and exit (boolean)')
 
 ###
 
 API_URL = 'https://digitallibrary.un.org/api/v1/record/'
-LOG_COLLECTION_NAME = 'dlx_dl_log'
+LOG_COLLECTION = 'dlx_dl_log'
+BLACKLIST_COLLECTION = 'blacklist'
 WHITELIST = ['digitization.s3.amazonaws.com', 'undl-js.s3.amazonaws.com', 'un-maps.s3.amazonaws.com', 'dag.un.org']
+
 AUTH_TYPE = {
     '100': 'PERSONAL',
     '110': 'CORPORATE',
@@ -64,35 +65,22 @@ def main(**kwargs):
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
     
     args = parser.parse_args()
-    DB.connect(args.connect)
+    
+    if isinstance(kwargs.get('connect'), (MongoClient, MockClient)):
+        DB.client = kwargs['connect']
+    else:
+        DB.connect(args.connect)
+
     #args.email = None
 
     ## process arguments
     
-    if args.api_key and args.log:
-        cstr = args.log
-        
-        if cstr[0:9] == 'mongomock':
-            cstr = 'mongodb://.../?authSource=dlx_dl_dummy'
-            log = MockClient(cstr)['dlx_dl_dummy'][LOG_COLLECTION_NAME]
-            blacklist = MockClient(cstr)['dlx_dl_dummy']['blacklist']
-        else:
-            match = re.search(r'\?authSource=([\w]+)', cstr)
-
-            if match:
-                log_db_name = match.group(1)
-            else:
-                raise Exception('Log DB name not found')
-
-            log = MongoClient(cstr)[log_db_name][LOG_COLLECTION_NAME]
-            blacklist = MongoClient(cstr)[log_db_name]['blacklist']
-    else:
-        log = None
+    log = DB.handle[LOG_COLLECTION]
+    blacklist = DB.handle[BLACKLIST_COLLECTION]
     
     cls = BibSet if args.type == 'bib' else AuthSet
     since, to = None, None
 
-    
     if args.modified_within:
         since = datetime.utcnow() - timedelta(seconds=int(args.modified_within))
         rset = _get_recordset(cls, since)
@@ -136,6 +124,9 @@ def main(**kwargs):
 
     if args.output_file:
         if args.output_file.lower() == 'stdout':
+            if args.api_key:
+                raise Exception('Can\'t set --output_file to STDOUT with --api_key')
+                
             out = sys.stdout
         else:
             out = open(args.output_file, 'w', encoding='utf-8')
@@ -143,16 +134,11 @@ def main(**kwargs):
         out = open(os.devnull, 'w')
 
     ## write
-        
-    out.write('<collection>')
     
     if args.type == 'bib':
-        # Adding blacklist
         process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only, blacklist)
-    else:
+    elif args.type == 'auth':
         process_auths(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log)
-    
-    out.write('</collection>')
     
     return
     
@@ -161,15 +147,15 @@ def main(**kwargs):
 def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, blacklist):
     export_start = datetime.now(timezone.utc)
     
+    out.write('<collection>')
+    
     for bib in rset:
         _fft_from_files(bib)
         
         if files_only and not bib.get_fields('FFT'):
             continue
 
-        this_191_a = bib.get_value('191','a')
-        this_count = blacklist.count_documents({"symbol":"{}".format(this_191_a)}, limit=1)
-        if this_count > 0:
+        if blacklist.count_documents({"symbol": bib.get_value('191', 'a')}, limit=1) > 0:
             continue
         
         bib.delete_field('001')
@@ -184,10 +170,14 @@ def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_
         
         if api_key:
             post('bib', bib.id, xml, api_key, email, callback_url, nonce_key, log, export_start)
-           
+    
+    out.write('</collection>')
+    
 def process_auths(rset, out, api_key, email, callback_url, nonce_key, log):
     export_start = datetime.now(timezone.utc)
-      
+    
+    out.write('<collection>')
+    
     for auth in rset:
         atag = auth.heading_field.tag
         
@@ -215,6 +205,8 @@ def process_auths(rset, out, api_key, email, callback_url, nonce_key, log):
         if api_key:
             post('auth', auth.id, xml, api_key, email, callback_url, nonce_key, log, export_start)
             
+    out.write('</collection>')
+    
 def _035(record):
     place = 0
     
@@ -391,8 +383,7 @@ def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, started_
         'xml': xml
     }
     
-    if log:
-        log.insert_one(logdata)
+    log.insert_one(logdata)
     
     # clean for JSON serialization
     logdata.pop('_id', None) # pymongo adds the _id key to the dict on insert??

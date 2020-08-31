@@ -33,28 +33,26 @@ dlx_dl.main(connect='<connection_string>', type='bib', id=1)
 ```
 
 * Required arguments are `--connect` and `--type`, and one of `--id`, `--list`, `--modified_from`, or `--modified_within` 
-* If you supply `--output_file`, an XML file of all the records meeting the criteria will be written to that path
+* If you supply `--output_file`, an XML file of all the records meeting the criteria will be written to that path. Use "STDOUT" to print the XML to the console
 * if you supply `--api_key`, each file that meets the criteria will be written to DL in "insertorreplace" mode
-* If you supply `--log`, a log will be written to the specified database in a collection called "dlx_dl_log".
-* If you run the program as a function, you can access the log data through the module's global variable `LOG_DATA`
 
 ### Examples
-> Preview (display in console) records that meet export criteria and exit
+> Preview (display in console) records that meet export criteria without writing XML
 ```bash
 $ dlx-dl --connect=<connection_string> --type=bib --modified_from=2020-04-06 --preview
 ```
 
-> Write records as batch to XML file
+> Write single record to DL by ID
 ```bash
-$ dlx-dl --connect=<connection_string> --type=bib --modified_from=2020-04-06 --output_file=<path_to_file>
+$ dlx-dl --connect=<connection_string> --type=bib --id=1000000 --api_key=<api_key>
 ```
 
-> Write single record to DL and log
+> Write records to DL from a list of IDs
 ```bash
-$ dlx-dl --connect=<connection_string> --type=bib --id=1000000 --api_key=<api_key> --log=<connection_string>
+$ dlx-dl --connect=<connection_string> --type=bib --list=ids.txt --api_key=<api_key> 
 ```
 
-> Write multiple records to DL, one at a time, and log
+> Write records to DL that were modified in the last hour
 ```bash
-$ dlx-dl --connect=<connection_string> --type=bib --modified_within=3600 --api_key=<api_key> --log=<connection_string>
+$ dlx-dl --connect=<connection_string> --type=bib --modified_within=3600 --api_key=<api_key> 
 ```
