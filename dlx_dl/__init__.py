@@ -19,7 +19,7 @@ parser.add_argument('--modified_from', help='ISO datetime (UTC)')
 parser.add_argument('--modified_to', help='ISO datetime (UTC)')
 parser.add_argument('--modified_within', help='Seconds')
 parser.add_argument('--modified_since_log', action='store_true', help='boolean')
-parser.add_argument('--list', help='file with list of IDs (max 1000)')
+parser.add_argument('--list', help='file with list of IDs (max 5000)')
 parser.add_argument('--id', help='a single record ID')
 parser.add_argument('--output_file', help='write XML as batch to this file. use "STDOUT" to print in console')
 parser.add_argument('--api_key', help='UNDL-issued api key')
@@ -98,10 +98,10 @@ def main(**kwargs):
         rset = cls.from_query({'_id': int(args.id)})
     elif args.list:
         with open(args.list, 'r') as f:
-            ids = [int(line) for line in f.readlines()]
+            ids = [int(row[0]) for row in [line.split("\t") for line in f.readlines()]]
             
-            if len(ids) > 3000:
-                raise Exception('Max 3000 IDs')
+            if len(ids) > 5000:
+                raise Exception('Max 5000 IDs')
                 
             rset = cls.from_query({'_id': {'$in': ids}})
     else:
