@@ -109,12 +109,15 @@ def test_blacklist(db, capsys):
     from http.server import HTTPServer 
     from xmldiff.main import diff_texts
     
-    db['dummy']['blacklist'].insert_one({'symbol': 'TEST/1'})
-            
     server = HTTPServer(('127.0.0.1', 9090), None)
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
     dlx_dl.API_URL = 'http://127.0.0.1:9090'
+    
+    db['dummy']['blacklist'].insert_one({'symbol': 'TEST/1'})
+    # control here has no FFT fields
+    control = '<record><datafield ind1=" " ind2=" " tag="035"><subfield code="a">(DHL)1</subfield></datafield><datafield ind1=" " ind2=" " tag="191"><subfield code="a">TEST/1</subfield></datafield><datafield ind1=" " ind2=" " tag="245"><subfield code="a">title_1</subfield></datafield><datafield ind1=" " ind2=" " tag="700"><subfield code="a">1</subfield></datafield><datafield ind1=" " ind2=" " tag="980"><subfield code="a">BIB</subfield></datafield></record>'
 
     dlx_dl.main(connect=db, type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x')
-    assert db['dummy']['dlx_dl_log'].count_documents({}) == 1
+    entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
+    assert diff_texts(entry['xml'], control) == []
     

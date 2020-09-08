@@ -150,12 +150,10 @@ def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_
     out.write('<collection>')
     
     for bib in rset:
-        _fft_from_files(bib)
+        if blacklist.count_documents({"symbol": bib.get_value('191', 'a')}, limit=1) == 0:
+            _fft_from_files(bib)
         
         if files_only and not bib.get_fields('FFT'):
-            continue
-
-        if blacklist.count_documents({"symbol": bib.get_value('191', 'a')}, limit=1) > 0:
             continue
         
         bib.delete_field('001')
