@@ -77,6 +77,7 @@ def main(**kwargs):
     
     log = DB.handle[LOG_COLLECTION]
     blacklist = DB.handle[BLACKLIST_COLLECTION]
+    blacklisted = [x['symbol'] for x in blacklist.find({})]
     
     cls = BibSet if args.type == 'bib' else AuthSet
     since, to = None, None
@@ -136,7 +137,7 @@ def main(**kwargs):
     ## write
     
     if args.type == 'bib':
-        process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only, blacklist)
+        process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only, blacklisted)
     elif args.type == 'auth':
         process_auths(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log)
     
@@ -144,18 +145,16 @@ def main(**kwargs):
     
 ###
 
-def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, blacklist):
+def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, blacklisted):
     export_start = datetime.now(timezone.utc)
     
     out.write('<collection>')
     
     for bib in rset:
-        _fft_from_files(bib)
+        if bib.get_value('191', 'a') not in blacklisted:
+            _fft_from_files(bib)
         
         if files_only and not bib.get_fields('FFT'):
-            continue
-
-        if blacklist.count_documents({"symbol": bib.get_value('191', 'a')}, limit=1) > 0:
             continue
         
         bib.delete_field('001')
