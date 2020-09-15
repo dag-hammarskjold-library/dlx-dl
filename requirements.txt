@@ -2,5 +2,6 @@ certifi==2020.4.5.1
 chardet==3.0.4
 git+https://github.com/dag-hammarskjold-library/dlx
 idna==2.9
+mongomock
 requests==2.23.0
 urllib3==1.25.9

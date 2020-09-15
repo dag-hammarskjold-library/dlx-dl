@@ -60,7 +60,7 @@ ISO_STR = {
 
 ###
 
-def main(**kwargs):
+def run(**kwargs):
     if kwargs:
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
     
@@ -394,4 +394,4 @@ def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, started_
 ###
 
 if __name__ == '__main__':
-    main()
+    run()
