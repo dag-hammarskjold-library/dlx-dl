@@ -14,7 +14,7 @@ From Python:
 ```python
 import dlx_dl
 
-dlx_dl.main(help=True)
+dlx_dl.run(help=True)
 ```
 
 ### Notes
@@ -29,7 +29,7 @@ Python:
 ```Python
 import dlx_dl
 
-dlx_dl.main(connect='<connection_string>', type='bib', id=1)
+dlx_dl.run(connect='<connection_string>', type='bib', id=1)
 ```
 
 * Required arguments are `--connect` and `--type`, and one of `--id`, `--list`, `--modified_from`, or `--modified_within` 
@@ -52,7 +52,7 @@ $ dlx-dl --connect=<connection_string> --type=bib --id=1000000 --api_key=<api_ke
 $ dlx-dl --connect=<connection_string> --type=bib --list=ids.txt --api_key=<api_key> 
 ```
 
-> Write records to DL that were modified in the last hour
+> Write records to DL that were modified in the last 3600 seconds (one hour)
 ```bash
 $ dlx-dl --connect=<connection_string> --type=bib --modified_within=3600 --api_key=<api_key> 
 ```
