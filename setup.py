@@ -23,7 +23,8 @@ setup(
     python_requires = '>=3.6',
     entry_points = {
         'console_scripts': [
-            'dlx-dl=dlx_dl:main'
+            'dlx-dl=dlx_dl:run',
+            'dlx-dl-comp=dlx_dl_comp:run'
         ]
     }
 )
