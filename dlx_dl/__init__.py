@@ -253,11 +253,6 @@ def _856(bib):
             if lang:
                 lang = 'English' if lang == 'Eng' else lang
                 bib.set('FFT', 'd', lang, address=[place])
-                
-            fmt = field.get_value('q')
-            
-            if fmt:
-                bib.set('FFT', 'f', fmt, address=[place])
             
             bib.fields.remove(field)
             
