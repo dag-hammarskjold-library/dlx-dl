@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from argparse import ArgumentParser
 from dlx import DB, Config
 from dlx.marc import Bib, BibSet, Auth, AuthSet, Datafield
-#from dlx.file import File
+from dlx.file import File, Identifier
 from pymongo import MongoClient
 from mongomock import MongoClient as MockClient
 from bson import SON
@@ -287,7 +287,7 @@ def _new_file_symbols(date_from, date_to=None):
     criteria = {'$gte': date_from}
     date_to and criteria.setdefault('$lte', date_to)
 
-    for f in DB.files.find('$or': [{'timestamp': criteria}, {'updated': criteria}]):
+    for f in DB.files.find({'$or': [{'timestamp': criteria}, {'updated': criteria}]}):
         for idx in f['identifiers']:
             if idx['type'] == 'symbol' and idx['value'] != '' and idx['value'] != ' ' and idx['value'] != '***': # note: clean these up in db
                 fft_symbols.append(idx['value'])
@@ -297,37 +297,19 @@ def _new_file_symbols(date_from, date_to=None):
 def _fft_from_files(bib):
     symbols = bib.get_values('191', 'a')
     
-    for symbol in symbols:
+    for symbol in set(symbols):
         if symbol == '' or symbol == ' ' or symbol == '***': # note: clean these up in db
             continue
-        
-        files = DB.files.find({'identifiers': {'type': 'symbol', 'value': symbol}}, projection={'uri': 1, 'languages': 1, 'timestamp': 1})
-        
-        latest_lang = {}
-        
-        for f in files:
-            lang = f['languages'][0]
             
-            if lang not in latest_lang:
-                latest_lang[lang] = f['_id']
-            else:
-                if f['timestamp'] > DB.files.find_one({'_id': latest_lang[lang]}, projection={'timestamp': 1})['timestamp']:
-                    latest_lang[lang] = f['_id']
-                    
-        for lang, idx in latest_lang.items():
-            f = DB.files.find_one({'_id': idx})
+        for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
+            xfile = File.latest_by_identifier_language(Identifier('symbol', symbol), lang)
             
-            field = Datafield(record_type='bib', tag='FFT', ind1=' ', ind2=' ')
-            field.set('a', 'https://' + f['uri'])
-            
-            try:
+            if xfile:
+                field = Datafield(record_type='bib', tag='FFT', ind1=' ', ind2=' ')
+                field.set('a', 'https://' + xfile.uri)
                 field.set('d', ISO_STR[lang])
-            except:
-                raise Exception(lang)
-                
-            field.set('n', encode_fn(symbols, lang, 'pdf'))
-            
-            bib.fields.append(field)
+                field.set('n', encode_fn(symbols, lang, 'pdf'))
+                bib.fields.append(field)
         
         return bib
     
