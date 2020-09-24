@@ -292,7 +292,7 @@ def _new_file_symbols(date_from, date_to=None):
     criteria = {'$gte': date_from}
     date_to and criteria.setdefault('$lte', date_to)
 
-    for f in DB.files.find({'timestamp': criteria}):
+    for f in DB.files.find('$or': [{'timestamp': criteria}, {'updated': criteria}]):
         for idx in f['identifiers']:
             if idx['type'] == 'symbol' and idx['value'] != '' and idx['value'] != ' ' and idx['value'] != '***': # note: clean these up in db
                 fft_symbols.append(idx['value'])
