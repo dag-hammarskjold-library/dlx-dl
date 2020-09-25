@@ -27,7 +27,14 @@ def db():
     handle = TemporaryFile()
     handle.write(b'some data')
     handle.seek(0)
-    File.import_from_handle(handle, 'filename', [Identifier('symbol', 'TEST/1')], ['EN'], '', 'test')
+    File.import_from_handle(
+        handle,
+        filename='',
+        identifiers=[Identifier('symbol', 'TEST/1')],
+        languages=['EN'], 
+        mimetype='text', 
+        source='test'
+    )
 
     return DB.client
     
