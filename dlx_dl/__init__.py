@@ -86,11 +86,11 @@ def run(**kwargs):
         since = datetime.utcnow() - timedelta(seconds=int(args.modified_within))
         rset = _get_recordset(cls, since)
     elif args.modified_from and args.modified_to:
-        since = datetime.fromisoformat(args.modified_from)
-        to = datetime.fromisoformat(args.modified_to)
+        since = datetime.strptime(args.modified_from, '%Y-%m-%d')
+        to = datetime.strptime(args.modified_to, '%Y-%m-%d')
         rset = _get_recordset(cls, since, to)
     elif args.modified_from:
-        since = datetime.fromisoformat(args.modified_from)
+        since = datetime.strptime(args.modified_from, '%Y-%m-%d')
         rset = _get_recordset(cls, since)
     elif args.modified_since_log:
         last_export = next(log.aggregate([{'$sort': {'export_start' : -1}}]))['export_start']
