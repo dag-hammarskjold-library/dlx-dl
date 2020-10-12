@@ -151,7 +151,13 @@ def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_
     out.write('<collection>')
     
     for bib in rset:
-        if bib.get_value('191', 'a') not in blacklisted:
+        flag = False
+        
+        for sym in bib.get_values('191', 'a'):
+            if sym in blacklisted:
+                flag = True
+
+        if not flag:
             _fft_from_files(bib)
         
         if files_only and not bib.get_fields('FFT'):
@@ -310,8 +316,10 @@ def _fft_from_files(bib):
                 field.set('d', ISO_STR[lang])
                 field.set('n', encode_fn(symbols, lang, 'pdf'))
                 bib.fields.append(field)
+                
+                continue
         
-        return bib
+    return bib
     
 def clean_fn(fn):
     parts = fn.split('.')
