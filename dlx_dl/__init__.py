@@ -316,8 +316,10 @@ def _fft_from_files(bib):
                 field.set('d', ISO_STR[lang])
                 field.set('n', encode_fn(symbols, lang, 'pdf'))
                 bib.fields.append(field)
+                
+                continue
         
-        return bib
+    return bib
     
 def clean_fn(fn):
     parts = fn.split('.')
