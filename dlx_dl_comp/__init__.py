@@ -15,6 +15,10 @@ parser.add_argument('--file', required=True, help='An "Excel export" with parame
 parser.add_argument('--modified_from', required=True)
 parser.add_argument('--modified_to')
 parser.add_argument('--type', required=True, choices=['bib', 'auth'])
+parser.add_argument('--api_key', help='UNDL-issued api key')
+parser.add_argument('--email', help='disabled')
+parser.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.")
+parser.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.')
 
 def run(**kwargs):
     if kwargs:
@@ -43,12 +47,32 @@ def run(**kwargs):
     modified_from = datetime.strptime(args.modified_from, '%Y-%m-%d')
     modified_to = datetime.strptime(args.modified_to, '%Y-%m-%d') if args.modified_to else datetime.now(timezone.utc)
             
+    in_dlx = []
+    
     for record in cls.from_query({'updated': {'$gte': modified_from, '$lt': modified_to}}, projection={'998': 1}):
         ldl = dl_last.get(record.id, 0)    
         ldlx = record.get_value('998', 'z')
         
         if int(ldl) < int(ldlx):
             print('\t'.join([str(record.id), str(ldl), str(ldlx)]))
+        
+        in_dlx.append(record.id)
+        
+    td = open('to_delete.xml', 'w')
+    td.write('<collection>')
+        
+    for idx in dl_last.keys():
+        if idx not in in_dlx:
+            (xrecord, pre) = (Bib(), '(DHL)') if args.type == 'bib' else (Auth(), '(DHLAUTH)')
+            
+            xrecord.set('035', 'a', f'{pre}{idx}')
+            xrecord.set('980', 'a', 'DELETED')
+            
+            td.write(xrecord.to_xml())
+            
+    td.write('</collection>')
+            
+
 
 ###   
     

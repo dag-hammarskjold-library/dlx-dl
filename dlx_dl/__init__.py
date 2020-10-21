@@ -21,6 +21,7 @@ parser.add_argument('--modified_within', help='Seconds')
 parser.add_argument('--modified_since_log', action='store_true', help='boolean')
 parser.add_argument('--list', help='file with list of IDs (max 5000)')
 parser.add_argument('--id', help='a single record ID')
+parser.add_argument('--ids', nargs='+', help='variable-length list of record IDs. if prpvided, this must be the last argument')
 parser.add_argument('--output_file', help='write XML as batch to this file. use "STDOUT" to print in console')
 parser.add_argument('--api_key', help='UNDL-issued api key')
 parser.add_argument('--email', help='disabled')
@@ -62,8 +63,16 @@ ISO_STR = {
 
 def run(**kwargs):
     if kwargs:
+        ids = kwargs.pop(ids)
+        fonly = kwargs.pop(fonly)
+        preview = kwargs.pop(preview)
+        
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
-    
+        
+        if fonly: sys.argv.append('--files_only')
+        if preview: sys.argv.append('--preview')
+        if ids: sys.argv += ids
+     
     args = parser.parse_args()
     
     if isinstance(kwargs.get('connect'), (MongoClient, MockClient)):
@@ -105,6 +114,9 @@ def run(**kwargs):
                 raise Exception('Max 5000 IDs')
                 
             rset = cls.from_query({'_id': {'$in': ids}})
+    elif args.ids:
+        print(args.ids)
+        exit()
     else:
         raise Exception('One of the arguments --id --modified_from --modified_within --list is required')
         
