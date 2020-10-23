@@ -18,7 +18,7 @@ dlx_dl.run(help=True)
 ```
 
 ### Notes
-To run the program as a Python function, pass the arguments to the main() function as normal Python keyword arguments.
+To run the program as a Python function, pass the arguments to the run() function as normal Python keyword arguments.
 
 Command line:
 ```bash

@@ -315,28 +315,30 @@ def _new_file_symbols(date_from, date_to=None):
 def _fft_from_files(bib):
     symbols = bib.get_values('191', 'a')
     
+    seen = []
+    
     for symbol in set(symbols):
         if symbol == '' or symbol == ' ' or symbol == '***': # note: clean these up in db
             continue
-            
+           
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             xfile = File.latest_by_identifier_language(Identifier('symbol', symbol), lang)
             
-            if xfile:
+            if xfile and xfile.uri not in seen:
                 field = Datafield(record_type='bib', tag='FFT', ind1=' ', ind2=' ')
                 field.set('a', 'https://' + xfile.uri)
                 field.set('d', ISO_STR[lang])
                 field.set('n', encode_fn(symbols, lang, 'pdf'))
                 bib.fields.append(field)
                 
-                continue
+                seen.append(xfile.uri)
         
     return bib
     
 def clean_fn(fn):
     parts = fn.split('.')
     fn = '-'.join(parts[:-1]) + '.' + parts[-1]
-    fn = fn.translate(str.maketrans(' [];', '_^^&'))
+    fn = fn.translate(str.maketrans(' [];', '_^^!'))
     return fn
     
 def encode_fn(symbols, language, extension):
@@ -346,7 +348,7 @@ def encode_fn(symbols, language, extension):
     symbols = [symbols] if isinstance(symbols, str) else symbols
     xsymbols = [sym.translate(str.maketrans(' /[]*:;', '__^^!#%')) for sym in symbols]
 
-    return '{}-{}.{}'.format('&'.join(xsymbols), language.upper(), extension)
+    return '{}-{}.{}'.format('--'.join(xsymbols), language.upper(), extension)
   
 def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, started_at):
     headers = {
