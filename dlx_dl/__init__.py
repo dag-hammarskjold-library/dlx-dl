@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 from dlx import DB, Config
 from dlx.marc import Bib, BibSet, Auth, AuthSet, Datafield
 from dlx.file import File, Identifier
-from pymongo import MongoClient
+from pymongo import MongoClient, DESCENDING
 from mongomock import MongoClient as MockClient
 from bson import SON
 
@@ -14,6 +14,7 @@ from bson import SON
 
 parser = ArgumentParser(prog='dlx-dl')
 parser.add_argument('--connect', required=True, help='dlx MDB connection string')
+parser.add_argument('--source', help='an identity to use in the log')
 parser.add_argument('--type', required=True, choices=['bib', 'auth'])
 parser.add_argument('--modified_from', help='ISO datetime (UTC)')
 parser.add_argument('--modified_to', help='ISO datetime (UTC)')
@@ -21,7 +22,7 @@ parser.add_argument('--modified_within', help='Seconds')
 parser.add_argument('--modified_since_log', action='store_true', help='boolean')
 parser.add_argument('--list', help='file with list of IDs (max 5000)')
 parser.add_argument('--id', help='a single record ID')
-parser.add_argument('--ids', nargs='+', help='variable-length list of record IDs. if prpvided, this must be the last argument')
+parser.add_argument('--ids', nargs='+', help='variable-length list of record IDs')
 parser.add_argument('--output_file', help='write XML as batch to this file. use "STDOUT" to print in console')
 parser.add_argument('--api_key', help='UNDL-issued api key')
 parser.add_argument('--email', help='disabled')
@@ -63,15 +64,16 @@ ISO_STR = {
 
 def run(**kwargs):
     if kwargs:
-        ids = kwargs.pop(ids)
-        fonly = kwargs.pop(fonly)
-        preview = kwargs.pop(preview)
+        ids, since_log, fonly, preview = [kwargs.get(x) and kwargs.pop(x) for x in ('ids', 'modified_since_log', 'files_only', 'preview')]
         
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
         
         if fonly: sys.argv.append('--files_only')
         if preview: sys.argv.append('--preview')
-        if ids: sys.argv += ids
+        if since_log: sys.argv.append('--modified_since_log')
+        if ids:
+            sys.argv.append('--ids')
+            sys.argv += ids
      
     args = parser.parse_args()
     
@@ -102,10 +104,20 @@ def run(**kwargs):
         since = datetime.strptime(args.modified_from, '%Y-%m-%d')
         rset = _get_recordset(cls, since)
     elif args.modified_since_log:
-        last_export = next(log.aggregate([{'$sort': {'export_start' : -1}}]))['export_start']
-        rset = _get_recordset(cls, last_export)
+        c = log.find({'source': args.source, 'export_end': {'$exists': 1}}, sort=[('export_start', DESCENDING)], limit=1)
+        last = next(c, None)
+        
+        if last:
+            last_export = last['export_start']
+            rset = _get_recordset(cls, last_export)
+        else:
+            warn('Initializing the source log entry and quitting.')
+            log.insert_one({'source': args.source, 'export_start': 'init', 'export_end': datetime.now(timezone.utc)})
+            return
     elif args.id:
         rset = cls.from_query({'_id': int(args.id)})
+    elif args.ids:
+        rset = cls.from_query({'_id': {'$in': [int(x) for x in args.ids]}})
     elif args.list:
         with open(args.list, 'r') as f:
             ids = [int(row[0]) for row in [line.split("\t") for line in f.readlines()]]
@@ -114,9 +126,6 @@ def run(**kwargs):
                 raise Exception('Max 5000 IDs')
                 
             rset = cls.from_query({'_id': {'$in': ids}})
-    elif args.ids:
-        print(args.ids)
-        exit()
     else:
         raise Exception('One of the arguments --id --modified_from --modified_within --list is required')
         
@@ -148,21 +157,28 @@ def run(**kwargs):
 
     ## write
     
+    export_start = datetime.now(timezone.utc)
+    
     if args.type == 'bib':
-        process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only, blacklisted)
+        process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only, blacklisted, export_start)
     elif args.type == 'auth':
-        process_auths(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log)
+        process_auths(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, export_start)
+        
+    log.insert_one({'source': args.source, 'export_start': export_start, 'export_end': datetime.now(timezone.utc)})
     
     return
     
 ###
 
-def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, blacklisted):
-    export_start = datetime.now(timezone.utc)
+def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, blacklisted, export_start):
+    #export_start = datetime.now(timezone.utc)
     
     out.write('<collection>')
     
     for bib in rset:
+        if bib.get_value('245', 'a')[0:16].lower() == 'work in progress':
+            continue
+        
         flag = False
         
         for sym in bib.get_values('191', 'a'):
@@ -190,18 +206,14 @@ def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_
     
     out.write('</collection>')
     
-def process_auths(rset, out, api_key, email, callback_url, nonce_key, log):
-    export_start = datetime.now(timezone.utc)
+def process_auths(rset, out, api_key, email, callback_url, nonce_key, log, export_start):
+    #export_start = datetime.now(timezone.utc)
     
     out.write('<collection>')
     
     for auth in rset:
         atag = auth.heading_field.tag
         
-        if atag == '150':
-            warn('Can\'t update thesaurus terms at this time: record {}'.format(auth.id))
-            continue
-    
         auth.delete_field('001')
         auth.delete_field('005')
         auth = _035(auth)
@@ -350,7 +362,7 @@ def encode_fn(symbols, language, extension):
 
     return '{}-{}.{}'.format('--'.join(xsymbols), language.upper(), extension)
   
-def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, started_at):
+def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, export_start):
     headers = {
         'Authorization': 'Token ' + api_key,
         'Content-Type': 'application/xml; charset=utf-8',
@@ -372,7 +384,7 @@ def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, started_
     response = requests.post(API_URL, params=params, headers=headers, data=xml.encode('utf-8'))
      
     logdata = {
-        'export_start': started_at,
+        'export_start': export_start,
         'time': datetime.now(timezone.utc),
         'record_type': rtype, 
         'record_id': rid, 
