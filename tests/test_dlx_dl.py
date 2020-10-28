@@ -130,7 +130,7 @@ def test_modified_since_log(db, capsys):
     from http.server import HTTPServer 
     from xmldiff.main import diff_texts
     from dlx.marc import Bib
-    
+
     server = HTTPServer(('127.0.0.1', 9090), None)
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
     dlx_dl.API_URL = 'http://127.0.0.1:9090'
@@ -138,8 +138,9 @@ def test_modified_since_log(db, capsys):
     dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x')
     capsys.readouterr().out # clear stdout
     Bib().set('999', 'a', 'new').commit()
-    dlx_dl.run(connect=db, source='test', type='bib', modified_since_log=True, output_file='STDOUT')
-    assert capsys.readouterr().out == '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)3</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="999" ind1=" " ind2=" "><subfield code="a">new</subfield></datafield></record></collection>'
+    dlx_dl.run(connect=db, source='test', type='bib', modified_since_log=True, output_file='STDOUT')  
+    control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)3</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="999" ind1=" " ind2=" "><subfield code="a">new</subfield></datafield></record></collection>'
+    assert diff_texts(capsys.readouterr().out, control) == []
     
 @responses.activate
 def test_blacklist(db, capsys):
