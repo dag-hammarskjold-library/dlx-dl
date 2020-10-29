@@ -106,7 +106,6 @@ def run(**kwargs):
     elif args.modified_since_log:
         c = log.find({'source': args.source, 'export_end': {'$exists': 1}}, sort=[('export_start', DESCENDING)], limit=1)
         last = next(c, None)
-        
         if last:
             last_export = last['export_start']
             rset = _get_recordset(cls, last_export)
@@ -121,10 +120,7 @@ def run(**kwargs):
     elif args.list:
         with open(args.list, 'r') as f:
             ids = [int(row[0]) for row in [line.split("\t") for line in f.readlines()]]
-            
-            if len(ids) > 5000:
-                raise Exception('Max 5000 IDs')
-                
+            if len(ids) > 5000: raise Exception('Max 5000 IDs')
             rset = cls.from_query({'_id': {'$in': ids}})
     else:
         raise Exception('One of the arguments --id --modified_from --modified_within --list is required')
@@ -132,23 +128,19 @@ def run(**kwargs):
     if args.preview:
         for record in rset:
             denote = ''
-            
             if to and record.updated > to:
                 # the record has been updated since the file
                 denote = '*'
             elif since and record.updated < since:
                 # the file has been updated since the record
                 denote = '**'
-
             print('\t'.join([str(record.id), str(record.updated), denote]))
-
         return
 
     if args.output_file:
         if args.output_file.lower() == 'stdout':
             if args.api_key:
-                raise Exception('Can\'t set --output_file to STDOUT with --api_key')
-                
+                raise Exception('Can\'t set --output_file to STDOUT with --api_key') 
             out = sys.stdout
         else:
             out = open(args.output_file, 'w', encoding='utf-8')

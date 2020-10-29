@@ -34,7 +34,7 @@ def db():
         filename='',
         identifiers=[Identifier('symbol', 'TEST/1')],
         languages=['EN'], 
-        mimetype='text', 
+        mimetype='text/plain', 
         source='test'
     )
 
