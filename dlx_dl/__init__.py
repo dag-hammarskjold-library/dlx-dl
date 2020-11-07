@@ -104,14 +104,14 @@ def run(**kwargs):
         since = datetime.strptime(args.modified_from, '%Y-%m-%d')
         rset = _get_recordset(cls, since)
     elif args.modified_since_log:
-        c = log.find({'source': args.source, 'export_end': {'$exists': 1}}, sort=[('export_start', DESCENDING)], limit=1)
+        c = log.find({'source': args.source, 'record_type': args.type, 'export_end': {'$exists': 1}}, sort=[('export_start', DESCENDING)], limit=1)
         last = next(c, None)
         if last:
             last_export = last['export_start']
             rset = _get_recordset(cls, last_export)
         else:
             warn('Initializing the source log entry and quitting.')
-            log.insert_one({'source': args.source, 'export_start': 'init', 'export_end': datetime.now(timezone.utc)})
+            log.insert_one({'source': args.source, 'record_type': args.type, 'export_start': datetime.now(timezone.utc), 'export_end': datetime.now(timezone.utc)})
             return
     elif args.id:
         rset = cls.from_query({'_id': int(args.id)})
@@ -152,17 +152,17 @@ def run(**kwargs):
     export_start = datetime.now(timezone.utc)
     
     if args.type == 'bib':
-        process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only, blacklisted, export_start)
+        process_bibs(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, args.files_only, blacklisted, export_start, args.source)
     elif args.type == 'auth':
-        process_auths(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, export_start)
+        process_auths(rset, out, args.api_key, args.email, args.callback_url, args.nonce_key, log, export_start, args.source)
         
-    log.insert_one({'source': args.source, 'export_start': export_start, 'export_end': datetime.now(timezone.utc)})
+    log.insert_one({'source': args.source, 'record_type': args.type, 'export_start': export_start, 'export_end': datetime.now(timezone.utc)})
     
     return
     
 ###
 
-def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, blacklisted, export_start):
+def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_only, blacklisted, export_start, source):
     #export_start = datetime.now(timezone.utc)
     
     out.write('<collection>')
@@ -194,11 +194,11 @@ def process_bibs(rset, out, api_key, email, callback_url, nonce_key, log, files_
         out.write(xml)
         
         if api_key:
-            post('bib', bib.id, xml, api_key, email, callback_url, nonce_key, log, export_start)
+            post('bib', bib.id, xml, api_key, email, callback_url, nonce_key, log, export_start, source)
     
     out.write('</collection>')
     
-def process_auths(rset, out, api_key, email, callback_url, nonce_key, log, export_start):
+def process_auths(rset, out, api_key, email, callback_url, nonce_key, log, export_start, source):
     #export_start = datetime.now(timezone.utc)
     
     out.write('<collection>')
@@ -224,7 +224,7 @@ def process_auths(rset, out, api_key, email, callback_url, nonce_key, log, expor
         out.write(xml)
                     
         if api_key:
-            post('auth', auth.id, xml, api_key, email, callback_url, nonce_key, log, export_start)
+            post('auth', auth.id, xml, api_key, email, callback_url, nonce_key, log, export_start, source)
             
     out.write('</collection>')
     
@@ -354,7 +354,7 @@ def encode_fn(symbols, language, extension):
 
     return '{}-{}.{}'.format('--'.join(xsymbols), language.upper(), extension)
   
-def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, export_start):
+def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, export_start, source):
     headers = {
         'Authorization': 'Token ' + api_key,
         'Content-Type': 'application/xml; charset=utf-8',
@@ -378,6 +378,7 @@ def post(rtype, rid, xml, api_key, email, callback_url, nonce_key, log, export_s
     logdata = {
         'export_start': export_start,
         'time': datetime.now(timezone.utc),
+        'source': source,
         'record_type': rtype, 
         'record_id': rid, 
         'response_code': response.status_code, 
