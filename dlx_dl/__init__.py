@@ -125,6 +125,11 @@ def run(**kwargs):
     else:
         raise Exception('One of the arguments --id --modified_from --modified_within --list is required')
         
+    if args.api_key and rset.count > 300:
+        rset = list(rset)[0:300]
+        
+        warn('Limiting export set to 300')
+        
     if args.preview:
         for record in rset:
             denote = ''
