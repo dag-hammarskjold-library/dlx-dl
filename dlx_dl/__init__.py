@@ -150,7 +150,7 @@ def run(**kwargs):
         else:
             out = open(args.output_file, 'w', encoding='utf-8')
     else:
-        out = open(os.devnull, 'w')
+        out = open(os.devnull, 'w', encoding='utf-8')
 
     ## write
     
