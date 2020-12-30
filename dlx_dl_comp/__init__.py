@@ -33,7 +33,7 @@ def run(**kwargs):
     else:
         DB.connect(args.connect)
 
-    dataframe = concat(read_html(open(args.file).read()))    
+    dataframe = concat(read_html(open(args.file, 'rb').read()))    
     dl_last = {}
     
     for index, row in dataframe.iterrows():
