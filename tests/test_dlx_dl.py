@@ -15,7 +15,12 @@ def db():
     from dlx.file import S3, File, Identifier
     from tempfile import TemporaryFile
     
-    DB.connect('mongomock://localhost') # mock connection always creates a fresh db 
+    DB.connect('mongomock://localhost') # ? does mock connection create a fresh db ?
+    
+    DB.bibs.drop()
+    DB.auths.drop()
+    DB.files.drop()
+    DB.handle['dlx_dl_log'].drop()
     
     Auth().set('100', 'a', 'name_1').commit()
     Auth().set('100', 'a', 'name_2').commit()
@@ -97,7 +102,7 @@ def test_by_date(db, capsys):
     dlx_dl.run(connect=db, source='test', type='bib', modified_within=100, output_file='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
     
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=0, output_file='STDOUT')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_within=-1, output_file='STDOUT')
     assert capsys.readouterr().out == '<collection></collection>'
     
 @responses.activate
@@ -161,4 +166,26 @@ def test_blacklist(db, capsys):
     dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x')
     entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
     assert diff_texts(entry['xml'], control) == []
+
+@responses.activate   
+def test_queue(db, capsys):
+    import time, json
+    from http.server import HTTPServer 
+    from xmldiff.main import diff_texts
     
+    server = HTTPServer(('127.0.0.1', 9090), None)
+    responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
+    dlx_dl.API_URL = 'http://127.0.0.1:9090'
+
+    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x', queue=1)
+    data = list(filter(None, capsys.readouterr().out.split('\n')))
+    assert len(data) == 1
+    assert json.loads(data[0])['record_id'] == 1
+    
+    time.sleep(.1)
+    dlx_dl.run(connect=db, source='test', type='bib', api_key='x', modified_within=0, queue=1)
+    data = list(filter(None, capsys.readouterr().out.split('\n')))
+    assert len(data) == 1
+    assert json.loads(data[0])['record_id'] == 2
+    
+### end
