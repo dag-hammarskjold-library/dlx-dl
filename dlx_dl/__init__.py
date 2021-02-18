@@ -99,10 +99,6 @@ def run(**kwargs):
     ### criteria
     
     records = get_records(args, log, queue)
-    
-    if args.preview:
-        print(preview(records, since, to))
-        return
         
     ### write
     
@@ -117,14 +113,23 @@ def run(**kwargs):
             continue
 
         if args.type == 'bib':
+            if record.get_value('245', 'a')[0:16].lower() == 'work in progress':
+                continue
+                
             record = process_bib(record, blacklisted=blacklisted, files_only=args.files_only)
         elif args.type == 'auth':
             record = process_auth(record)
+            
+        # values of "-" cause DL import error
+        for field in record.datafields:
+            for sub in field.subfields:
+                if not hasattr(sub, 'xref') and sub.value == '-':
+                    sub.value = '_'
         
         xml = record.to_xml(xref_prefix='(DHLAUTH)')
         
         if args.api_key:
-            logdata = submit(record, export_start, args)
+            logdata = submit_to_dl(record, export_start, args)
             queue.delete_many({'type': args.type, 'record_id': record.id})     
             log.insert_one(logdata)
             
@@ -183,7 +188,13 @@ def get_records(args, log, queue):
             records = cls.from_query({'_id': {'$in': ids}})
     else:
         raise Exception('One of the arguments --id --modified_from --modified_within --list is required')
- 
+        
+    ### preview
+    
+    if args.preview:
+        print(preview(records, since, to))
+        exit()
+
     ### queue
     
     to_process = []
@@ -201,9 +212,15 @@ def get_records(args, log, queue):
             )
     
     if args.queue is not None and len(to_process) < limit:
-        for d in queue.find({'source': args.source, 'type': args.type}, limit=(limit - len(to_process))):
+        free_space = limit - len(to_process)
+        queued = queue.find({'source': args.source, 'type': args.type}, limit=free_space)
+        
+        for i, d in enumerate(queued):
             to_process.append(next(cls.from_query({'_id': d['record_id']})))
             
+        if i:
+            warn(f'Took {i} from queue')
+
     return to_process
 
 def preview(records, since, to):
@@ -411,7 +428,7 @@ def encode_fn(symbols, language, extension):
 
     return '{}-{}.{}'.format('--'.join(xsymbols), language.upper(), extension)
 
-def submit(record, export_start, args):
+def submit_to_dl(record, export_start, args):
     xml = record.to_xml(xref_prefix='(DHLAUTH)')
     
     headers = {
