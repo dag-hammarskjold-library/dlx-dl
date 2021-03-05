@@ -215,9 +215,16 @@ def get_records(args, log, queue):
         free_space = limit - len(to_process)
         queued = queue.find({'source': args.source, 'type': args.type}, limit=free_space)
         
+        i = None
+        
         for i, d in enumerate(queued):
-            to_process.append(next(cls.from_query({'_id': d['record_id']})))
+            record = next(cls.from_query({'_id': d['record_id']}), None)
             
+            if record:
+                to_process.append(record)
+            else:
+                queue.delete_many({'type': args.type, 'record_id': d['record_id']})
+                
         if i:
             warn(f'Took {i} from queue')
 

@@ -188,4 +188,12 @@ def test_queue(db, capsys):
     assert len(data) == 1
     assert json.loads(data[0])['record_id'] == 2
     
+    # queued record is deleted
+    time.sleep(.1)
+    db['dummy']['dlx_dl_queue'].insert_one({'record_id': 42, 'source': 'test', 'type': 'bib'})
+    dlx_dl.run(connect=db, source='test', type='bib', api_key='x', modified_within=0, queue=1)
+    data = list(filter(None, capsys.readouterr().out.split('\n')))
+    assert len(data) == 0
+    assert db['dummy']['dlx_dl_queue'].find_one({}) == None
+    
 ### end
