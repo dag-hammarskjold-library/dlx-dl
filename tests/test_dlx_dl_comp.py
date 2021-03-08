@@ -16,9 +16,9 @@ def db():
     DB.bibs.drop()
     DB.auths.drop()
     
-    Bib({'_id': 1}).set('998', 'z', '20200101000000').commit()
-    Bib({'_id': 2}).set('998', 'z', '20200201000000').commit()
-    Auth({'_id': 1}).set('998', 'z', '20200101000000').commit()
+    Bib({'_id': 1}).set('998', 'c', '20200101000000').commit()
+    Bib({'_id': 2}).set('998', 'c', '20200201000000').commit()
+    Auth({'_id': 1}).set('998', 'c', '20200101000000').commit()
     
     return DB.client
 
@@ -27,7 +27,7 @@ def excel_export():
     from tempfile import NamedTemporaryFile
     
     f = open('temp', 'wb')
-    f.write(b'<html><table><tr><td>1</td><td>(DHL)1</td><td>20200101000000</td></tr><tr><td>2</td><td>(DHL)2</td><td>20200101000000</td></tr></table></html>')
+    f.write(b'<html><table><tr><td>1</td><td>(DHL)1</td><td>20200101000000</td></tr><tr><td>2</td><td>(DHL)2</td><td>20200101000000</td><td>20200101000000</td></tr></table></html>')
     
     return f.name
     
