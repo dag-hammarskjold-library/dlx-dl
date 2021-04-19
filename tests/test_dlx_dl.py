@@ -28,7 +28,7 @@ def db():
     Bib().set('191', 'a', 'TEST/1').set('245', 'a', 'title_1').set('700', 'a', 1).commit()
     Bib().set('245', 'a', 'title_2').set('700', 'a', 2).commit()
     
-    S3.connect('mock_key', 'mock_key_id', 'mock_bucket')
+    S3.connect(access_key='key', access_key_id='key_id', bucket='mock_bucket')
     S3.client.create_bucket(Bucket=S3.bucket)
     
     handle = TemporaryFile()
