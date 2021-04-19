@@ -398,7 +398,7 @@ def _new_file_symbols(date_from, date_to=None):
     return list(set(fft_symbols))
     
 def _fft_from_files(bib):
-    symbols = bib.get_values('191', 'a')
+    symbols = bib.get_values('191', 'a') + bib.get_values('191', 'z')
     
     seen = []
     
