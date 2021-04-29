@@ -1,20 +1,21 @@
 import sys, os, re, json, requests
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone, timedelta
 from argparse import ArgumentParser
 from dlx import DB, Config
 from dlx.marc import Bib, BibSet, Auth, AuthSet
 from pymongo import MongoClient
+from bson import Regex
 from mongomock import MongoClient as MockClient
 from pandas import concat, read_html
 
 ###
 
 parser = ArgumentParser()
-parser.add_argument('--connect', required=True, help='dlx connection string')
-parser.add_argument('--file', required=True, help='An "Excel export" with parameter "035__a,998__a,998__c,998__z"')
-parser.add_argument('--modified_from', required=True)
-parser.add_argument('--modified_to')
+parser.add_argument('--connect', required=True, help='DLX connection string')
+parser.add_argument('--file', required=True, help='An "Excel export" with parameter "035__a,998__a,998__c"')
+parser.add_argument('--created', required=True, help='String to match with 998$a')
 parser.add_argument('--type', required=True, choices=['bib', 'auth'])
+parser.add_argument('--delete', action='store_true', help='Boolean')
 parser.add_argument('--api_key', help='UNDL-issued api key')
 parser.add_argument('--email', help='disabled')
 parser.add_argument('--callback_url', help="A URL that can receive the results of a submitted task")
@@ -25,17 +26,19 @@ API_URL = 'https://digitallibrary.un.org/api/v1/record/'
 def run(**kwargs):
     if kwargs:
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
-        
+       
     args = parser.parse_args()
+    out = open(f'{args.created}.txt', 'w')
     
     if isinstance(kwargs.get('connect'), (MongoClient, MockClient)):
         DB.client = kwargs['connect']
     else:
         DB.connect(args.connect)
-
+    
+    # index dl
     dataframe = concat(read_html(open(args.file, 'rb').read()))    
     dl_last = {}
-    
+
     for index, row in dataframe.iterrows():
         id_pattern = r'\(DHL\)(\d+)' if args.type == 'bib' else r'\(DHLAUTH\)(\d+)'
         match = re.search(id_pattern, row[1])
@@ -44,47 +47,67 @@ def run(**kwargs):
             rid = int(match.group(1))
             dl_last[rid] = row[2] if str(row[3]).lower() == 'nan' else row[3]
 
+    # index dlx
     cls = BibSet if args.type == 'bib' else AuthSet
-    
-    modified_from = datetime.strptime(args.modified_from, '%Y-%m-%d')
-    modified_to = datetime.strptime(args.modified_to, '%Y-%m-%d') if args.modified_to else datetime.now(timezone.utc)
-            
-    in_dlx = []
-        
-    c1 = {'_id': {'$in': list(dl_last.keys())}}
-    #c2 = {'updated': {'$gte': modified_from, '$lt': modified_to}}
-    c2 = {
+    cr = args.created.replace('-', '')
+
+    q = {
         '998.subfields': {
             '$elemMatch': {
-                '$or': [{'code': 'a'}, {'code': 'c'}],
-                'value': {'$gte': modified_from, '$lt': modified_to}
+                'code': 'a', 
+                'value': Regex(f'^{cr}')
             }
-        }
+        },
+        'updated': {'$lt': datetime.now().replace(hour=0, minute=0, second=0)}
     }
     
-    for record in cls.from_query({'$or': [c1, c2]}, projection={'998': 1}):
-        ldl = dl_last.get(record.id, 0)
+    # compare
+    for record in cls.from_query(q, projection={'998': 1}):
+        ldl = dl_last.get(record.id)
         
         try:
             int(ldl)
         except:
-            ldl = 0
-
-        ldlx = record.get_value('998', 'c') or record.get_value('998', 'a') or 0
+            ldl = None
         
-        if int(ldl) < int(ldlx):
-            print('\t'.join([str(record.id), str(int(ldl)), str(int(ldlx))]))
+        if ldl is None:
+            ldl = datetime.min
+        else:
+            ldl = datetime.strptime(ldl, '%Y%m%d%H%M%S')
 
-        in_dlx.append(record.id)
+        ldlx = record.get_value('998', 'c') or record.get_value('998', 'a')
+        ldlx = datetime.strptime(ldlx, '%Y%m%d%H%M%S')
+        
+        if ldlx - ldl in (timedelta(hours=4), timedelta(hours=5)):
+            # NY / UTC timezone ambiguity
+            pass
+        elif ldl < ldlx:
+            text = '\t'.join([str(record.id), str(ldl), str(ldlx)])
+            print(text)
+            out.write(text + '\n')
+            
+    out.close()
         
     # delete
-    if args.api_key:
+    if args.delete:
+        assert args.api_key
         assert args.nonce_key
         assert args.callback_url
         
         ids = list(dl_last.keys())
-        rset = cls.from_query({'_id': {'$in': ids}}, projection={'_id': 1})
-        seen = [r.id for r in rset]
+        inc = 50000
+        chunks = int(len(ids) / inc) + 1
+        start = 0
+        end = inc
+        seen = []
+        
+        for chunk in range(0, chunks):
+            # prevents query string from being too long
+            rset = cls.from_query({'_id': {'$in': ids[start:end]}}, projection={'_id': 1})
+            seen += [r.id for r in rset]
+            start += inc
+            end += inc
+        
         to_delete = []
         
         for idx in filter(lambda x: x not in seen, ids):
