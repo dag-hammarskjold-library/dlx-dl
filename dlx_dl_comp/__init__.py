@@ -12,9 +12,13 @@ from pandas import concat, read_html
 
 parser = ArgumentParser()
 parser.add_argument('--connect', required=True, help='DLX connection string')
-parser.add_argument('--file', required=True, help='An "Excel export" with parameter "035__a,998__a,998__c"')
-parser.add_argument('--created', required=True, help='String to match with 998$a')
+parser.add_argument('--file', required=True, help='A DL "Excel export" with parameter "035__a,998__a,998__c"')
 parser.add_argument('--type', required=True, choices=['bib', 'auth'])
+
+pg = parser.add_mutually_exclusive_group(required=True)
+pg.add_argument('--created', help='String to match with DLX 998$a')
+pg.add_argument('--changed', help='String to match with DLX 998$c')
+
 parser.add_argument('--delete', action='store_true', help='Boolean')
 parser.add_argument('--api_key', help='UNDL-issued api key')
 parser.add_argument('--email', help='disabled')
@@ -28,7 +32,8 @@ def run(**kwargs):
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
        
     args = parser.parse_args()
-    out = open(f'{args.created}.txt', 'w')
+    date_code = 'a' if args.created else 'c'
+    out = open(f'{args.type}_998{date_code}_{args.created or args.changed}.txt', 'w')
     
     if isinstance(kwargs.get('connect'), (MongoClient, MockClient)):
         DB.client = kwargs['connect']
@@ -49,13 +54,14 @@ def run(**kwargs):
 
     # index dlx
     cls = BibSet if args.type == 'bib' else AuthSet
-    cr = args.created.replace('-', '')
-
+    dstr = args.created or args.changed
+    dstr = dstr.replace('-', '')
+    
     q = {
         '998.subfields': {
             '$elemMatch': {
-                'code': 'a', 
-                'value': Regex(f'^{cr}')
+                'code': date_code, 
+                'value': Regex(f'^{dstr}')
             }
         },
         'updated': {'$lt': datetime.now().replace(hour=0, minute=0, second=0)}
@@ -90,10 +96,13 @@ def run(**kwargs):
         
     # delete
     if args.delete:
-        assert args.api_key
-        assert args.nonce_key
-        assert args.callback_url
-        
+        try:
+            assert args.api_key
+            assert args.nonce_key
+            assert args.callback_url
+        except:
+            raise Exception('--api_key, --nonce_key, and --callback_url are required with --delete')
+            
         ids = list(dl_last.keys())
         inc = 50000
         chunks = int(len(ids) / inc) + 1
