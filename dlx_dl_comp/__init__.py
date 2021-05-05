@@ -108,18 +108,30 @@ def run(**kwargs):
         chunks = int(len(ids) / inc) + 1
         start = 0
         end = inc
-        seen = []
+        seen = {}
+        
+        print('Scanning for deleted records... ')
         
         for chunk in range(0, chunks):
             # prevents query string from being too long
             rset = cls.from_query({'_id': {'$in': ids[start:end]}}, projection={'_id': 1})
-            seen += [r.id for r in rset]
+            chars = len(seen)
+            #seen += [r.id for r in rset]
+            
+            for r in rset:
+                seen[r.id] = True
+            
             start += inc
             end += inc
-        
+           
+            print(('\b' * chars) + str(len(seen)), end='')
+            
+        print('\n')
+        print('Filtering...')
+            
         to_delete = []
         
-        for idx in filter(lambda x: x not in seen, ids):
+        for idx in filter(lambda x: seen.get(x) == None, ids):
             (xrecord, pre) = (Bib(), '(DHL)') if args.type == 'bib' else (Auth(), '(DHLAUTH)')
             xrecord.id = idx
             xrecord.set('035', 'a', f'{pre}{idx}')
