@@ -23,6 +23,7 @@ parser.add_argument('--modified_since_log', action='store_true', help='boolean')
 parser.add_argument('--list', help='file with list of IDs (max 5000)')
 parser.add_argument('--id', help='a single record ID')
 parser.add_argument('--ids', nargs='+', help='variable-length list of record IDs')
+parser.add_argument('--query', help='MongoDB query document')
 parser.add_argument('--output_file', help='write XML as batch to this file. use "STDOUT" to print in console')
 parser.add_argument('--api_key', help='UNDL-issued api key')
 parser.add_argument('--email', help='disabled')
@@ -202,8 +203,11 @@ def get_records(args, log, queue):
             ids = [int(row[0]) for row in [line.split("\t") for line in f.readlines()]]
             if len(ids) > 5000: raise Exception(f'Max 5000 IDs from list')
             records = cls.from_query({'_id': {'$in': ids}})
+    elif args.query:
+        query = args.query.replace('\'', '"')
+        records = cls.from_query(json.loads(query))
     else:
-        raise Exception('One of the arguments --id --modified_from --modified_within --list is required')
+        raise Exception('One of the arguments --id --modified_from --modified_within --list --query is required')
         
     ### preview
     
