@@ -14,7 +14,7 @@ from bson import SON
 
 parser = ArgumentParser(prog='dlx-dl')
 parser.add_argument('--connect', required=True, help='dlx MDB connection string')
-parser.add_argument('--source', help='an identity to use in the log')
+parser.add_argument('--source', required=True, help='an identity to use in the log')
 parser.add_argument('--type', required=True, choices=['bib', 'auth'])
 parser.add_argument('--modified_from', help='ISO datetime (UTC)')
 parser.add_argument('--modified_to', help='ISO datetime (UTC)')
@@ -119,12 +119,28 @@ def run(**kwargs):
             record = process_bib(record, blacklisted=blacklisted, files_only=args.files_only)
         elif args.type == 'auth':
             record = process_auth(record)
-            
-        # values of "-" cause DL import error
+        
+        # clean
+        
+        skip_and_add_to_queue = False
+        
         for field in record.datafields:
             for sub in field.subfields:
                 if not hasattr(sub, 'xref') and sub.value == '-':
                     sub.value = '_'
+                    
+                if hasattr(sub, 'xref') and sub.value is None:
+                    # the xref suth is not in the system yet
+                    skip_and_add_to_queue = True
+                    
+        if skip_and_add_to_queue:
+            queue.insert_one(
+                {'time': datetime.now(timezone.utc), 'source': args.source, 'type': args.type, 'record_id': record.id}
+            )
+            
+            continue
+            
+        # export
         
         xml = record.to_xml(xref_prefix='(DHLAUTH)')
         
@@ -226,7 +242,7 @@ def get_records(args, log, queue):
                 queue.delete_many({'type': args.type, 'record_id': d['record_id']})
                 
         if i:
-            warn(f'Took {i} from queue')
+            warn(f'Took {i + 1} from queue')
 
     return to_process
 
