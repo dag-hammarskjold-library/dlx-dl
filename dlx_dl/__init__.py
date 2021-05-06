@@ -439,7 +439,7 @@ def submit_to_dl(record, export_start, args):
     xml = record.to_xml(xref_prefix='(DHLAUTH)')
     
     headers = {
-                'Authorization': 'Token ' + args.api_key,
+        'Authorization': 'Token ' + args.api_key,
         'Content-Type': 'application/xml; charset=utf-8',
     }
 
