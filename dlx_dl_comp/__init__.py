@@ -29,7 +29,12 @@ API_URL = 'https://digitallibrary.un.org/api/v1/record/'
 
 def run(**kwargs):
     if kwargs:
+        do_delete = kwargs.pop('delete', None)
+        
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
+        
+        if do_delete: 
+            sys.argv.append('--delete') 
        
     args = parser.parse_args()
     date_code = 'a' if args.created else 'c'
@@ -79,7 +84,7 @@ def run(**kwargs):
         if ldl is None:
             ldl = datetime.min
         else:
-            ldl = datetime.strptime(ldl, '%Y%m%d%H%M%S')
+            ldl = datetime.strptime(str(int(ldl)), '%Y%m%d%H%M%S')
 
         ldlx = record.get_value('998', 'c') or record.get_value('998', 'a')
         ldlx = datetime.strptime(ldlx, '%Y%m%d%H%M%S')
@@ -116,7 +121,6 @@ def run(**kwargs):
             # prevents query string from being too long
             rset = cls.from_query({'_id': {'$in': ids[start:end]}}, projection={'_id': 1})
             chars = len(seen)
-            #seen += [r.id for r in rset]
             
             for r in rset:
                 seen[r.id] = True
