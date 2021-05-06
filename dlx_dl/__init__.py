@@ -242,7 +242,7 @@ def get_records(args, log, queue):
                 queue.delete_many({'type': args.type, 'record_id': d['record_id']})
                 
         if i:
-            warn(f'Took {i} from queue')
+            warn(f'Took {i + 1} from queue')
 
     return to_process
 
