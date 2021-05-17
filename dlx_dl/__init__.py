@@ -24,12 +24,13 @@ parser.add_argument('--list', help='file with list of IDs (max 5000)')
 parser.add_argument('--id', help='a single record ID')
 parser.add_argument('--ids', nargs='+', help='variable-length list of record IDs')
 parser.add_argument('--query', help='MongoDB query document')
-parser.add_argument('--output_file', help='write XML as batch to this file. use "STDOUT" to print in console')
+parser.add_argument('--xml', help='write XML as batch to this file. use "STDOUT" to print in console')
 parser.add_argument('--api_key', help='UNDL-issued api key')
 parser.add_argument('--email', help='disabled')
 parser.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.")
 parser.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.')
 parser.add_argument('--files_only', action='store_true', help='only export records with new files')
+parser.add_argument('--delete_only', action='store_true', help='only export records to delete')
 parser.add_argument('--preview', action='store_true', help='list records that meet criteria and exit (boolean)')
 parser.add_argument('--queue', help='Number of records at which to limit export and queue')
 
@@ -116,7 +117,7 @@ def run(**kwargs):
         if args.type == 'bib':
             if record.get_value('245', 'a')[0:16].lower() == 'work in progress':
                 continue
-                
+            
             record = process_bib(record, blacklisted=blacklisted, files_only=args.files_only)
         elif args.type == 'auth':
             record = process_auth(record)
@@ -176,20 +177,20 @@ def get_records(args, log, queue):
 
     if args.modified_within:
         since = datetime.utcnow() - timedelta(seconds=int(args.modified_within))
-        records = get_records_by_date(cls, since)
+        records = get_records_by_date(cls, since, delete_only=args.delete_only)
     elif args.modified_from and args.modified_to:
         since = datetime.strptime(args.modified_from, '%Y-%m-%d')
         to = datetime.strptime(args.modified_to, '%Y-%m-%d')
-        records = get_records_by_date(cls, since, to)
+        records = get_records_by_date(cls, since, to, delete_only=args.delete_only)
     elif args.modified_from:
         since = datetime.strptime(args.modified_from, '%Y-%m-%d')
-        records = get_records_by_date(cls, since)
+        records = get_records_by_date(cls, since, delete_only=args.delete_only)
     elif args.modified_since_log:
         c = log.find({'source': args.source, 'record_type': args.type, 'export_end': {'$exists': 1}}, sort=[('export_start', DESCENDING)], limit=1)
         last = next(c, None)
         if last:
             last_export = last['export_start']
-            records = get_records_by_date(cls, last_export)
+            records = get_records_by_date(cls, last_export, delete_only=args.delete_only)
         else:
             warn('Initializing the source log entry and quitting.')
             log.insert_one({'source': args.source, 'record_type': args.type, 'export_start': datetime.now(timezone.utc), 'export_end': datetime.now(timezone.utc)})
@@ -220,7 +221,7 @@ def get_records(args, log, queue):
     to_process = []
     limit = int(args.queue or 0) or LIMIT
 
-    for i, r in enumerate(records):
+    for i, r in enumerate(records):       
         if i < limit:
             to_process.append(r)
         else:
@@ -264,15 +265,15 @@ def preview(records, since=None, to=None):
         print('\t'.join([str(record.id), str(record.updated), denote]))
 
 def output_handle(args):
-    if args.output_file:
-        if args.output_file.lower() == 'stdout':
+    if args.xml:
+        if args.xml.lower() == 'stdout':
             if args.api_key:
-                warn('Can\'t set --output_file to STDOUT with --api_key')
+                warn('Can\'t set --xml to STDOUT with --api_key')
                 out = open(os.devnull, 'w', encoding='utf-8')
             else:
                 out = sys.stdout
         else:
-            out = open(args.output_file, 'w', encoding='utf-8')
+            out = open(args.xml, 'w', encoding='utf-8')
     else:
         out = open(os.devnull, 'w', encoding='utf-8')
         
@@ -298,18 +299,25 @@ def process_bib(bib, *, blacklisted, files_only):
     bib.delete_field('005')
     bib = _035(bib)
     bib = _856(bib)
+    
+    if bib.get_value('980', 'a') == 'DELETED':
+        return bib
+    
     bib.set('980', 'a', 'BIB')
     
     return bib
     
 def process_auth(auth):
-    atag = auth.heading_field.tag
-        
     auth.delete_field('001')
     auth.delete_field('005')
     auth = _035(auth)
-    auth.set('980', 'a', 'AUTHORITY')
+    
+    if auth.get_value('980', 'a') == 'DELETED':
+        return auth
         
+    auth.set('980', 'a', 'AUTHORITY')
+    atag = auth.heading_field.tag
+    
     if atag in AUTH_TYPE.keys():
         atype = AUTH_TYPE[atag]
         auth.set('980', 'a', atype, address=['+'])
@@ -336,7 +344,7 @@ def _035(record):
         
         place += 1
     
-    pre = '(DHL)' if type(record) == Bib else '(DHLAUTH)'
+    pre = '(DHL)' if isinstance(record, Bib) else '(DHLAUTH)'
     record.set('035', 'a', pre + str(record.id), address=['+'])
     
     return record
@@ -383,10 +391,10 @@ def _856(bib):
             
     return bib
 
-def get_records_by_date(cls, date_from, date_to=None):
+def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     fft_symbols = _new_file_symbols(date_from, date_to)
     
-    if len(fft_symbols) > 1000:
+    if len(fft_symbols) > 10000:
         raise Exception('that\'s too many file symbols to look up, sorry :(')
     
     criteria = SON({'$gte': date_from})
@@ -402,6 +410,25 @@ def get_records_by_date(cls, date_from, date_to=None):
             ]
         }
     )
+    
+    hist = DB.handle['bib_history'] if cls == BibSet else DB.handle['auth_history']
+    deleted = list(hist.find({'deleted.time': {'$gte': date_from}}))
+
+    if deleted:
+        if delete_only:
+            rset.records = []
+
+        rcls = Bib if cls == BibSet else Auth
+        records = list(rset.records)
+        to_delete = []
+        
+        for d in deleted:
+            r = rcls({'_id': d['_id']})
+            r.set('980', 'a', 'DELETED')
+            r.updated = d['deleted']['time']
+            to_delete.append(r)
+
+        rset.records = (r for r in records + to_delete) # program is expecting an iterable
     
     return rset
     

@@ -60,15 +60,15 @@ def test_by_id(db, capsys): # capsys is a Pytest builtin fixture
     from xmldiff.main import diff_texts
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">TEST_1-EN.pdf</subfield></datafield></record></collection>'
-    dlx_dl.run(connect=db, source='test', type='bib', id='1', output_file='STDOUT')
+    dlx_dl.run(connect=db, source='test', type='bib', id='1', xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHLAUTH)1</subfield></datafield><datafield tag="100" ind1=" " ind2=" "><subfield code="a">name_1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">AUTHORITY</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">PERSONAL</subfield></datafield></record></collection>'
-    dlx_dl.run(connect=db, source='test', type='auth', id='1', output_file='STDOUT')
+    dlx_dl.run(connect=db, source='test', type='auth', id='1', xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
     
     # --ids
-    dlx_dl.run(connect=db, source='test', type='auth', ids=['1'], output_file='STDOUT')
+    dlx_dl.run(connect=db, source='test', type='auth', ids=['1'], xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
 
 def test_to_file(db, tmp_path):
@@ -76,7 +76,7 @@ def test_to_file(db, tmp_path):
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">TEST_1-EN.pdf</subfield></datafield></record></collection>'
     out = tmp_path / 'out.xml'
-    dlx_dl.run(connect=db, source='test', type='bib', id='1', output_file=out)
+    dlx_dl.run(connect=db, source='test', type='bib', id='1', xml=out)
     assert diff_texts(out.read_text(), control) == []
     
 def test_by_list(db, tmp_path, capsys):
@@ -86,23 +86,23 @@ def test_by_list(db, tmp_path, capsys):
     ids.write_text('\n'.join([str(x) for x in (1, 2)]))
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">TEST_1-EN.pdf</subfield></datafield></record><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)2</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_2</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_2</subfield><subfield code="0">(DHLAUTH)2</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield></record></collection>'
-    dlx_dl.run(connect=db, source='test', type='bib', list=ids, output_file='STDOUT')
+    dlx_dl.run(connect=db, source='test', type='bib', list=ids, xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
     
 def test_by_date(db, capsys):
     from xmldiff.main import diff_texts
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">TEST_1-EN.pdf</subfield></datafield></record><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)2</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_2</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_2</subfield><subfield code="0">(DHLAUTH)2</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield></record></collection>'
-    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), output_file='STDOUT')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
      
-    dlx_dl.run(connect=db, source='test', type='bib', modified_from=datetime.max.strftime('%Y-%m-%d'), output_file='STDOUT')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_from=datetime.max.strftime('%Y-%m-%d'), xml='STDOUT')
     assert capsys.readouterr().out == '<collection></collection>'
     
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=100, output_file='STDOUT')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_within=100, xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
     
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=-1, output_file='STDOUT')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_within=-1, xml='STDOUT')
     assert capsys.readouterr().out == '<collection></collection>'
     
 @responses.activate
