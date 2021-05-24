@@ -457,14 +457,14 @@ def _fft_from_files(bib):
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             xfile = File.latest_by_identifier_language(Identifier('symbol', symbol), lang)
             
-            if xfile and xfile.uri not in seen:
+            if xfile and lang not in seen:
                 field = Datafield(record_type='bib', tag='FFT', ind1=' ', ind2=' ')
                 field.set('a', 'https://' + xfile.uri)
                 field.set('d', ISO_STR[lang])
                 field.set('n', encode_fn(symbols, lang, 'pdf'))
                 bib.fields.append(field)
                 
-                seen.append(xfile.uri)
+                seen.append(lang)
         
     return bib
     
