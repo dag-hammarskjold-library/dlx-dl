@@ -83,6 +83,7 @@ def get_args(**kwargs):
     return parser.parse_args()
 
 def run(**kwargs):
+    START = datetime.now(timezone.utc)
     args = get_args(**kwargs)
     
     ### connect to DB
@@ -105,7 +106,7 @@ def run(**kwargs):
     ### write
     
     out = output_handle(args)
-    export_start = datetime.now(timezone.utc)
+    export_start = START
     seen = []
     
     out.write('<collection>')

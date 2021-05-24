@@ -196,4 +196,24 @@ def test_queue(db, capsys):
     assert len(data) == 0
     assert db['dummy']['dlx_dl_queue'].find_one({}) == None
     
+@responses.activate   
+def test_delete(db, capsys):
+    import json
+    from http.server import HTTPServer 
+    from xmldiff.main import diff_texts
+    from dlx.marc import Bib
+
+    server = HTTPServer(('127.0.0.1', 9090), None)
+    responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
+    dlx_dl.API_URL = 'http://127.0.0.1:9090'
+    
+    bib = Bib().set('245', 'a', 'Will self destruct')
+    bib.commit()
+    bib.delete()
+
+    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x')
+    data = list(filter(None, capsys.readouterr().out.split('\n')))
+    assert len(data) == 3
+    assert json.loads(data[2])['record_id'] == 3
+        
 ### end
