@@ -129,7 +129,7 @@ def run(**kwargs):
         
         for field in record.datafields:
             for sub in field.subfields:
-                if not hasattr(sub, 'xref') and sub.value == '-':
+                if not hasattr(sub, 'xref') and sub.value == '-' or sub.value ==  '':
                     sub.value = '_'
                     
                 if hasattr(sub, 'xref') and sub.value is None:
