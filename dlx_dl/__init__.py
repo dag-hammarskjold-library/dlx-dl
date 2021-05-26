@@ -129,13 +129,18 @@ def run(**kwargs):
         
         for field in record.datafields:
             for sub in field.subfields:
-                if not hasattr(sub, 'xref') and sub.value == '-' or sub.value ==  '':
-                    sub.value = '_'
-                    
                 if hasattr(sub, 'xref') and sub.value is None:
                     # the xref suth is not in the system yet
                     skip_and_add_to_queue = True
-                    
+                elif not hasattr(sub, 'xref'):
+                    if re.match(r'^-+$', sub.value):
+                        sub.value.replace('-', '_')
+                    elif sub.value == '' or re.match(r'^\s+$', sub.value):
+                        field.subfields.remove(sub)
+                        
+            if len(field.subfields) == 0:
+                record.fields.remove(field)
+
         if skip_and_add_to_queue:
             queue.insert_one(
                 {'time': datetime.now(timezone.utc), 'source': args.source, 'type': args.type, 'record_id': record.id}
