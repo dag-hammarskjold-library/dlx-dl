@@ -54,7 +54,7 @@ def excel_export():
     f.seek(0)
     
     return f
-    
+
 def test_by_id(db, capsys): # capsys is a Pytest builtin fixture
     from dlx.marc import Auth, Bib, BibSet
     from xmldiff.main import diff_texts
@@ -114,7 +114,7 @@ def test_post_and_log(db, excel_export):
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
     dlx_dl.API_URL = 'http://127.0.0.1:9090'
     
-    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), use_api=True, api_key='x')
     
     entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
     assert entry['record_id'] == 1
@@ -143,10 +143,10 @@ def test_modified_since_log(db, capsys):
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
     dlx_dl.API_URL = 'http://127.0.0.1:9090'
     
-    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), use_api=True, api_key='x')
     capsys.readouterr().out # clear stdout
     Bib().set('999', 'a', 'new').commit()
-    dlx_dl.run(connect=db, source='test', type='bib', modified_since_log=True, api_key='x')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_since_log=True, use_api=True, api_key='x')
     entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 3})
     control = '<record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)3</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="999" ind1=" " ind2=" "><subfield code="a">new</subfield></datafield></record>'
     assert diff_texts(entry['xml'], control) == []
@@ -163,7 +163,7 @@ def test_blacklist(db, capsys):
     db['dummy']['blacklist'].insert_one({'symbol': 'TEST/1'})
     # control here has no FFT fields
     control = '<record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield></record>'
-    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), use_api=True, api_key='x')
     entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
     assert diff_texts(entry['xml'], control) == []
 
@@ -177,13 +177,13 @@ def test_queue(db, capsys):
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
     dlx_dl.API_URL = 'http://127.0.0.1:9090'
 
-    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x', queue=1)
+    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), use_api=True, api_key='x', queue=1)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     assert len(data) == 1
     assert json.loads(data[0])['record_id'] == 1
     
     time.sleep(.1)
-    dlx_dl.run(connect=db, source='test', type='bib', api_key='x', modified_within=0, queue=1)
+    dlx_dl.run(connect=db, source='test', type='bib', use_api=True, api_key='x', modified_within=0, queue=1)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     assert len(data) == 1
     assert json.loads(data[0])['record_id'] == 2
@@ -191,7 +191,7 @@ def test_queue(db, capsys):
     # queued record is deleted
     time.sleep(.1)
     db['dummy']['dlx_dl_queue'].insert_one({'record_id': 42, 'source': 'test', 'type': 'bib'})
-    dlx_dl.run(connect=db, source='test', type='bib', api_key='x', modified_within=0, queue=1)
+    dlx_dl.run(connect=db, source='test', type='bib', use_api=True, api_key='x', modified_within=0, queue=1)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     assert len(data) == 0
     assert db['dummy']['dlx_dl_queue'].find_one({}) == None
@@ -211,7 +211,7 @@ def test_delete(db, capsys):
     bib.commit()
     bib.delete()
 
-    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), api_key='x')
+    dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), use_api=True, api_key='x')
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     assert len(data) == 3
     assert json.loads(data[2])['record_id'] == 3

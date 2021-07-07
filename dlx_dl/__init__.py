@@ -1,4 +1,5 @@
 import os, sys, math, re, requests, json
+import boto3
 from warnings import warn
 from urllib.parse import urlparse, urlunparse, quote, unquote
 from datetime import datetime, timezone, timedelta
@@ -9,32 +10,6 @@ from dlx.file import File, Identifier
 from pymongo import MongoClient, DESCENDING
 from mongomock import MongoClient as MockClient
 from bson import SON
-
-###
-
-parser = ArgumentParser(prog='dlx-dl')
-parser.add_argument('--connect', required=True, help='dlx MDB connection string')
-parser.add_argument('--source', required=True, help='an identity to use in the log')
-parser.add_argument('--type', required=True, choices=['bib', 'auth'])
-parser.add_argument('--modified_from', help='ISO datetime (UTC)')
-parser.add_argument('--modified_to', help='ISO datetime (UTC)')
-parser.add_argument('--modified_within', help='Seconds')
-parser.add_argument('--modified_since_log', action='store_true', help='boolean')
-parser.add_argument('--list', help='file with list of IDs (max 5000)')
-parser.add_argument('--id', help='a single record ID')
-parser.add_argument('--ids', nargs='+', help='variable-length list of record IDs')
-parser.add_argument('--query', help='MongoDB query document')
-parser.add_argument('--xml', help='write XML as batch to this file. use "STDOUT" to print in console')
-parser.add_argument('--api_key', help='UNDL-issued api key')
-parser.add_argument('--email', help='disabled')
-parser.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.")
-parser.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.')
-parser.add_argument('--files_only', action='store_true', help='only export records with new files')
-parser.add_argument('--delete_only', action='store_true', help='only export records to delete')
-parser.add_argument('--preview', action='store_true', help='list records that meet criteria and exit (boolean)')
-parser.add_argument('--queue', help='Number of records at which to limit export and queue')
-
-###
 
 API_URL = 'https://digitallibrary.un.org/api/v1/record/'
 LOG_COLLECTION = 'dlx_dl_log'
@@ -68,11 +43,43 @@ ISO_STR = {
 ###
 
 def get_args(**kwargs):
+    parser = ArgumentParser(prog='dlx-dl')
+    parser.add_argument('--source', required=True, help='an identity to use in the log')
+    parser.add_argument('--type', required=True, choices=['bib', 'auth'])
+    parser.add_argument('--modified_from', help='ISO datetime (UTC)')
+    parser.add_argument('--modified_to', help='ISO datetime (UTC)')
+    parser.add_argument('--modified_within', help='Seconds')
+    parser.add_argument('--modified_since_log', action='store_true', help='boolean')
+    parser.add_argument('--list', help='file with list of IDs (max 5000)')
+    parser.add_argument('--id', help='a single record ID')
+    parser.add_argument('--ids', nargs='+', help='variable-length list of record IDs')
+    parser.add_argument('--query', help='MongoDB query document')
+    parser.add_argument('--xml', help='write XML as batch to this file. use "STDOUT" to print in console')
+    parser.add_argument('--email', help='disabled')
+    parser.add_argument('--files_only', action='store_true', help='only export records with new files')
+    parser.add_argument('--delete_only', action='store_true', help='only export records to delete')
+    parser.add_argument('--preview', action='store_true', help='list records that meet criteria and exit (boolean)')
+    parser.add_argument('--queue', help='Number of records at which to limit export and queue')
+    parser.add_argument('--use_api', action='store_true')
+    
+    # get from AWS if not provided
+    ssm = boto3.client('ssm')
+    
+    def param(name):
+        return None if os.environ.get('DLX_DL_TESTING') else ssm.get_parameter(Name=name)['Parameter']['Value'] 
+
+    parser.add_argument('--connect', default=param('connect-string'))
+    parser.add_argument('--api_key', help='UNDL-issued api key', default=param('undl-dhl-metadata-api-key'))
+    parser.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.", default=param('undl-callback-url'))
+    parser.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.', default=param('undl-callback-nonce'))
+    
+    # if run as function convert args to sys.argv
     if kwargs:
-        ids, since_log, fonly, preview = [kwargs.get(x) and kwargs.pop(x) for x in ('ids', 'modified_since_log', 'files_only', 'preview')]
+        ids, since_log, fonly, preview, api = [kwargs.get(x) and kwargs.pop(x) for x in ('ids', 'modified_since_log', 'files_only', 'preview', 'use_api')]
         
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
         
+        if api: sys.argv.append('--use_api')
         if fonly: sys.argv.append('--files_only')
         if preview: sys.argv.append('--preview')
         if since_log: sys.argv.append('--modified_since_log')
@@ -152,7 +159,7 @@ def run(**kwargs):
         
         xml = record.to_xml(xref_prefix='(DHLAUTH)')
         
-        if args.api_key:
+        if args.use_api:
             logdata = submit_to_dl(record, export_start, args)
             queue.delete_many({'type': args.type, 'record_id': record.id})     
             log.insert_one(logdata)
@@ -170,7 +177,7 @@ def run(**kwargs):
 
     out.write('</collection>')
     
-    if args.api_key:    
+    if args.use_api:    
         log.insert_one({'source': args.source, 'record_type': args.type, 'export_start': export_start, 'export_end': datetime.now(timezone.utc)})
     
     return
@@ -273,8 +280,8 @@ def preview(records, since=None, to=None):
 def output_handle(args):
     if args.xml:
         if args.xml.lower() == 'stdout':
-            if args.api_key:
-                warn('Can\'t set --xml to STDOUT with --api_key')
+            if args.use_api:
+                warn('Can\'t set --xml to STDOUT with --use_api')
                 out = open(os.devnull, 'w', encoding='utf-8')
             else:
                 out = sys.stdout
