@@ -44,34 +44,41 @@ ISO_STR = {
 
 def get_args(**kwargs):
     parser = ArgumentParser(prog='dlx-dl')
-    parser.add_argument('--source', required=True, help='an identity to use in the log')
-    parser.add_argument('--type', required=True, choices=['bib', 'auth'])
-    parser.add_argument('--modified_from', help='ISO datetime (UTC)')
-    parser.add_argument('--modified_to', help='ISO datetime (UTC)')
-    parser.add_argument('--modified_within', help='Seconds')
-    parser.add_argument('--modified_since_log', action='store_true', help='boolean')
-    parser.add_argument('--list', help='file with list of IDs (max 5000)')
-    parser.add_argument('--id', help='a single record ID')
-    parser.add_argument('--ids', nargs='+', help='variable-length list of record IDs')
-    parser.add_argument('--query', help='MongoDB query document')
-    parser.add_argument('--xml', help='write XML as batch to this file. use "STDOUT" to print in console')
-    parser.add_argument('--email', help='disabled')
+    
     parser.add_argument('--files_only', action='store_true', help='only export records with new files')
     parser.add_argument('--delete_only', action='store_true', help='only export records to delete')
-    parser.add_argument('--preview', action='store_true', help='list records that meet criteria and exit (boolean)')
-    parser.add_argument('--queue', help='Number of records at which to limit export and queue')
-    parser.add_argument('--use_api', action='store_true')
+    parser.add_argument('--queue', help='number of records at which to limit export and place in queue')
+    
+    r = parser.add_argument_group('required')
+    r.add_argument('--source', required=True, help='an identity to use in the log')
+    r.add_argument('--type', required=True, choices=['bib', 'auth'])
+    
+    q = parser.add_argument_group('criteria', description='one criteria argument is required') 
+    qm = q.add_mutually_exclusive_group(required=True)
+    qm.add_argument('--modified_within', help='export records modified within the past number of seconds')
+    qm.add_argument('--modified_since_log', action='store_true', help='export records modified since the last logged run from --source (boolean)')
+    qm.add_argument('--list', help='file with list of IDs (max 5000)')
+    qm.add_argument('--id', help='a single record ID')
+    qm.add_argument('--ids', nargs='+', help='variable-length list of record IDs')
+    qm.add_argument('--query', help='JSON MongoDB query')
+
+    o = parser.add_argument_group('output', description='one output argument is required')
+    om = o.add_mutually_exclusive_group(required=True)
+    om.add_argument('--preview', action='store_true', help='list records that meet criteria and exit (boolean)')
+    om.add_argument('--xml', help='write XML as batch to this file. use "STDOUT" to print in console')
+    om.add_argument('--use_api', action='store_true', help='submit records to DL through the API (boolean)')
     
     # get from AWS if not provided
     ssm = boto3.client('ssm', region_name='us-east-1')
     
     def param(name):
         return None if os.environ.get('DLX_DL_TESTING') else ssm.get_parameter(Name=name)['Parameter']['Value'] 
-
-    parser.add_argument('--connect', default=param('connect-string'))
-    parser.add_argument('--api_key', help='UNDL-issued api key', default=param('undl-dhl-metadata-api-key'))
-    parser.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.", default=param('undl-callback-url'))
-    parser.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.', default=param('undl-callback-nonce'))
+    
+    c = parser.add_argument_group('credentials', description='these arguments are automatically supplied by AWS SSM if AWS credentials are configured')
+    c.add_argument('--connect', default=param('connect-string'), help='MongoDB connection string')
+    c.add_argument('--api_key', help='UNDL-issued api key', default=param('undl-dhl-metadata-api-key'))
+    c.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.", default=param('undl-callback-url'))
+    c.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.', default=param('undl-callback-nonce'))
     
     # if run as function convert args to sys.argv
     if kwargs:
@@ -191,13 +198,6 @@ def get_records(args, log, queue):
     if args.modified_within:
         since = datetime.utcnow() - timedelta(seconds=int(args.modified_within))
         records = get_records_by_date(cls, since, delete_only=args.delete_only)
-    elif args.modified_from and args.modified_to:
-        since = datetime.strptime(args.modified_from, '%Y-%m-%d')
-        to = datetime.strptime(args.modified_to, '%Y-%m-%d')
-        records = get_records_by_date(cls, since, to, delete_only=args.delete_only)
-    elif args.modified_from:
-        since = datetime.strptime(args.modified_from, '%Y-%m-%d')
-        records = get_records_by_date(cls, since, delete_only=args.delete_only)
     elif args.modified_since_log:
         c = log.find({'source': args.source, 'record_type': args.type, 'export_end': {'$exists': 1}}, sort=[('export_start', DESCENDING)], limit=1)
         last = next(c, None)
@@ -221,7 +221,7 @@ def get_records(args, log, queue):
         query = args.query.replace('\'', '"')
         records = cls.from_query(json.loads(query))
     else:
-        raise Exception('One of the arguments --id --modified_from --modified_within --list --query is required')
+        raise Exception('One of the criteria arguments is required')
         
     ### preview
     
@@ -507,7 +507,6 @@ def submit_to_dl(record, export_start, args):
     
     params = {
         'mode': 'insertorreplace',
-        'callback_email': args.email,
         'callback_url': args.callback_url,
         'nonce': json.dumps(nonce)
     }
