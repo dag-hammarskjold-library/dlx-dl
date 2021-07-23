@@ -63,7 +63,7 @@ def get_args(**kwargs):
     parser.add_argument('--use_api', action='store_true')
     
     # get from AWS if not provided
-    ssm = boto3.client('ssm')
+    ssm = boto3.client('ssm', region_name='us-east-1')
     
     def param(name):
         return None if os.environ.get('DLX_DL_TESTING') else ssm.get_parameter(Name=name)['Parameter']['Value'] 
