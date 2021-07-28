@@ -308,7 +308,9 @@ def process_bib(bib, *, blacklisted, files_only):
     if files_only and not bib.get_fields('FFT'):
         return bib
     
-    bib.delete_field('001')
+    while bib.get_value('001'):
+        bib.delete_field('001')
+    
     bib.delete_field('005')
     bib = _035(bib)
     bib = _856(bib)
@@ -321,7 +323,9 @@ def process_bib(bib, *, blacklisted, files_only):
     return bib
     
 def process_auth(auth):
-    auth.delete_field('001')
+    while auth.get_value('001'):
+        auth.delete_field('001')
+        
     auth.delete_field('005')
     auth = _035(auth)
     
