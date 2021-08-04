@@ -16,15 +16,14 @@ setup(
     license = 'http://www.opensource.org/licenses/bsd-license.php',
     packages = find_packages(exclude=['test']),
     test_suite = 'tests',
-    install_requires = requirements,
+    install_requires = 'dlx @ git+https://github.com/dag-hammarskjold-library/dlx',
     description = 'Export data fom DLX to DL',
     long_description = long_description,
     long_description_content_type = "text/markdown",
     python_requires = '>=3.6',
     entry_points = {
         'console_scripts': [
-            'dlx-dl=dlx_dl:run',
-            'dlx-dl-comp=dlx_dl_comp:run'
+            'dlx-dl=dlx_dl:run'
         ]
     }
 )
