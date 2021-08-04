@@ -1,2 +1,1 @@
-dlx @ git+https://github.com/dag-hammarskjold-library/dlx
-pandas
+-e git+https://github.com/dag-hammarskjold-library/dlx#egg=dlx
