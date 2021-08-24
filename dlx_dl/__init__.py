@@ -296,14 +296,10 @@ def output_handle(args):
 def process_bib(bib, *, blacklisted, files_only):
     if bib.get_value('245', 'a')[0:16].lower() == 'work in progress':
         return bib
-        
-    flag = False
-        
-    for sym in bib.get_values('191', 'a'):
-        if sym in blacklisted:
-            flag = True
-
-    if not flag:
+    
+    flags = list(filter(lambda x: x in blacklisted, bib.get_values('191', 'a')))
+    
+    if not flags and 'RES' not in bib.get_values('091', 'a'):   
         _fft_from_files(bib)
     
     if files_only and not bib.get_fields('FFT'):
