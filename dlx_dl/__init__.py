@@ -474,7 +474,7 @@ def _fft_from_files(bib):
                 field = Datafield(record_type='bib', tag='FFT', ind1=' ', ind2=' ')
                 field.set('a', 'https://' + xfile.uri)
                 field.set('d', ISO_STR[lang])
-                field.set('n', encode_fn(symbols, lang, 'pdf'))
+                field.set('n', encode_fn(symbols if len(symbols) <= 3 else symbols[0:1], lang, 'pdf'))
                 bib.fields.append(field)
                 
                 seen.append(lang)
