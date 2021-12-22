@@ -134,6 +134,11 @@ def run(**kwargs):
                 continue
             
             record = process_bib(record, blacklisted=blacklisted, files_only=args.files_only)
+            
+            if args.files_only and not record.get_fields('FFT'):
+                print(f'[{record.id}] No files detected')
+                continue
+                
         elif args.type == 'auth':
             record = process_auth(record)
         
