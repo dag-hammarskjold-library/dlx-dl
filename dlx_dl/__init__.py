@@ -1,4 +1,5 @@
 import os, sys, math, re, requests, json
+from io import StringIO
 import boto3
 from warnings import warn
 from urllib.parse import urlparse, urlunparse, quote, unquote
@@ -48,6 +49,7 @@ def get_args(**kwargs):
     parser.add_argument('--files_only', action='store_true', help='only export records with new files')
     parser.add_argument('--delete_only', action='store_true', help='only export records to delete')
     parser.add_argument('--queue', help='number of records at which to limit export and place in queue')
+    parser.add_argument('--batch', action='store_true', help='write records to API as batch')
     
     r = parser.add_argument_group('required')
     r.add_argument('--source', required=True, help='an identity to use in the log')
@@ -66,7 +68,7 @@ def get_args(**kwargs):
     om = o.add_mutually_exclusive_group(required=True)
     om.add_argument('--preview', action='store_true', help='list records that meet criteria and exit (boolean)')
     om.add_argument('--xml', help='write XML as batch to this file. use "STDOUT" to print in console')
-    om.add_argument('--use_api', action='store_true', help='submit records to DL through the API (boolean)')
+    om.add_argument('--use_api', '--api', action='store_true', help='submit records to DL through the API (boolean)')
     
     # get from AWS if not provided
     ssm = boto3.client('ssm', region_name='us-east-1')
@@ -82,11 +84,12 @@ def get_args(**kwargs):
     
     # if run as function convert args to sys.argv
     if kwargs:
-        ids, since_log, fonly, preview, api = [kwargs.get(x) and kwargs.pop(x) for x in ('ids', 'modified_since_log', 'files_only', 'preview', 'use_api')]
+        ids, since_log, fonly, preview, api, batch = [kwargs.get(x) and kwargs.pop(x) for x in ('ids', 'modified_since_log', 'files_only', 'preview', 'use_api', 'batch')]
         
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
         
         if api: sys.argv.append('--use_api')
+        if batch: sys.argv.append('--batch')
         if fonly: sys.argv.append('--files_only')
         if preview: sys.argv.append('--preview')
         if since_log: sys.argv.append('--modified_since_log')
@@ -173,24 +176,30 @@ def run(**kwargs):
         xml = record.to_xml(xref_prefix='(DHLAUTH)')
         
         if args.use_api:
-            logdata = submit_to_dl(record, export_start, args)
-            queue.delete_many({'type': args.type, 'record_id': record.id})     
-            log.insert_one(logdata)
+            if args.batch:
+                pass
+            else:    
+                logdata = submit_to_dl(record, export_start, args)
+                queue.delete_many({'type': args.type, 'record_id': record.id})     
+                log.insert_one(logdata)
             
-            # clean for JSON serialization
-            logdata.pop('_id', None) # pymongo adds the _id key to the dict on insert??
-            logdata['export_start'] = str(logdata['export_start'])
-            logdata['time'] = str(logdata['time'])
-            print(json.dumps(logdata))
+                # clean for JSON serialization
+                logdata.pop('_id', None) # pymongo adds the _id key to the dict on insert??
+                logdata['export_start'] = str(logdata['export_start'])
+                logdata['time'] = str(logdata['time'])
+                print(json.dumps(logdata))
             
-            queue.delete_many({'type': args.type, 'record_id': record.id})
+                queue.delete_many({'type': args.type, 'record_id': record.id})
         
         seen.append(record.id)
         out.write(xml)
 
     out.write('</collection>')
     
-    if args.use_api:    
+    if args.use_api and args.batch:
+        submit_batch(out.getvalue(), args)
+    
+    if args.use_api and args.modified_since_log:    
         log.insert_one({'source': args.source, 'record_type': args.type, 'export_start': export_start, 'export_end': datetime.now(timezone.utc)})
     
     return
@@ -293,6 +302,8 @@ def output_handle(args):
                 out = sys.stdout
         else:
             out = open(args.xml, 'w', encoding='utf-8')
+    elif args.batch:
+        out = StringIO()
     else:
         out = open(os.devnull, 'w', encoding='utf-8')
         
@@ -532,6 +543,26 @@ def submit_to_dl(record, export_start, args):
     
     return logdata
 
+def submit_batch(xml, args):
+    print('submitting batch')
+    
+    headers = {
+        'Authorization': 'Token ' + args.api_key,
+        'Content-Type': 'application/xml; charset=utf-8',
+    }
+
+    nonce = {'type': args.type, 'id': 'multi', 'key': args.nonce_key}
+    
+    params = {
+        'mode': 'insertorreplace',
+        'callback_url': args.callback_url,
+        'nonce': json.dumps(nonce)
+    }
+
+    response = requests.post(API_URL, params=params, headers=headers, data=xml.encode('utf-8'))
+    
+    print(response.text)
+    
 ###
 
 if __name__ == '__main__':
