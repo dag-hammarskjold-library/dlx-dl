@@ -199,7 +199,7 @@ def run(**kwargs):
     if args.use_api and args.batch:
         submit_batch(out.getvalue(), args)
     
-    if args.use_api and args.modified_since_log:    
+    if args.use_api:    
         log.insert_one({'source': args.source, 'record_type': args.type, 'export_start': export_start, 'export_end': datetime.now(timezone.utc)})
     
     return
