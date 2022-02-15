@@ -50,6 +50,7 @@ def get_args(**kwargs):
     parser.add_argument('--delete_only', action='store_true', help='only export records to delete')
     parser.add_argument('--queue', help='number of records at which to limit export and place in queue')
     parser.add_argument('--batch', action='store_true', help='write records to API as batch')
+    parser.add_argument('--email', help='receive batch results by email instead of callback')
     
     r = parser.add_argument_group('required')
     r.add_argument('--source', required=True, help='an identity to use in the log')
@@ -441,14 +442,23 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
         }
     )
     
+    rcls = Bib if cls == BibSet else Auth
     hist = DB.handle['bib_history'] if cls == BibSet else DB.handle['auth_history']
-    deleted = list(hist.find({'deleted.time': {'$gte': date_from}}))
+    deleted = list(hist.find({'deleted.time': {'$gte': date_from}}, {'_id': 1, 'deleted.time': 1}))
+    restored = []
+    
+    for i in range(0, len(deleted), 10000):
+        restored += cls.from_query({'_id': {'$in': [x['_id'] for x in deleted[i:i+10000]]}}, {'_id': 1}).records
+        
+    filtered_ids = list(set([x['_id'] for x in deleted]) - set([x.id for x in restored]))
+    deleted = list(filter(lambda x: x['_id'] in filtered_ids, deleted))
+    
+    print(f'found: {len(deleted)}')
 
     if deleted:
         if delete_only:
             rset.records = []
-
-        rcls = Bib if cls == BibSet else Auth
+            
         records = list(rset.records)
         to_delete = []
         
@@ -459,7 +469,10 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
             to_delete.append(r)
 
         rset.records = (r for r in records + to_delete) # program is expecting an iterable
-    
+    else:
+        if delete_only:
+            rset.records = []
+
     return rset
     
 def _new_file_symbols(date_from, date_to=None):
@@ -544,19 +557,19 @@ def submit_to_dl(record, export_start, args):
     return logdata
 
 def submit_batch(xml, args):
+    if not args.email:
+        raise Exception('--email required with batch')
+    
     print('submitting batch')
     
     headers = {
         'Authorization': 'Token ' + args.api_key,
         'Content-Type': 'application/xml; charset=utf-8',
     }
-
-    nonce = {'type': args.type, 'id': 'multi', 'key': args.nonce_key}
     
     params = {
         'mode': 'insertorreplace',
-        'callback_url': args.callback_url,
-        'nonce': json.dumps(nonce)
+        'callback_email': args.email
     }
 
     response = requests.post(API_URL, params=params, headers=headers, data=xml.encode('utf-8'))
