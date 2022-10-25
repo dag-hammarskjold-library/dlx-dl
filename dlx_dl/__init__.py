@@ -505,9 +505,9 @@ def _fft_from_files(bib):
                 field.set('d', ISO_STR[lang])
                 field.set('n', encode_fn(symbols if len(symbols) <= 3 else symbols[0:1], lang, 'pdf'))
                 bib.fields.append(field)
-                
+
                 seen.append(lang)
-        
+
     return bib
     
 def clean_fn(fn):
@@ -539,7 +539,7 @@ def submit_to_dl(record, export_start, args):
         'mode': 'insertorreplace',
         'callback_url': args.callback_url,
         'nonce': json.dumps(nonce)
-    }
+    } 
 
     response = requests.post(API_URL, params=params, headers=headers, data=xml.encode('utf-8'))
     
