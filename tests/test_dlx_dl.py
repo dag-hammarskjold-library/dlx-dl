@@ -1,7 +1,7 @@
 import os, pytest, responses
 from moto import mock_s3
 from datetime import datetime
-import dlx_dl
+from dlx_dl.scripts import export, sync
 
 os.environ['DLX_DL_TESTING'] = "true"
 
@@ -60,15 +60,15 @@ def test_by_id(db, capsys): # capsys is a Pytest builtin fixture
     from xmldiff.main import diff_texts
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">TEST_1-EN.pdf</subfield></datafield></record></collection>'
-    dlx_dl.run(connect=db, source='test', type='bib', id='1', xml='STDOUT')
+    export.run(connect=db, source='test', type='bib', id='1', xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHLAUTH)1</subfield></datafield><datafield tag="100" ind1=" " ind2=" "><subfield code="a">name_1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">AUTHORITY</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">PERSONAL</subfield></datafield></record></collection>'
-    dlx_dl.run(connect=db, source='test', type='auth', id='1', xml='STDOUT')
+    export.run(connect=db, source='test', type='auth', id='1', xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
     
     # --ids
-    dlx_dl.run(connect=db, source='test', type='auth', ids=['1'], xml='STDOUT')
+    export.run(connect=db, source='test', type='auth', ids=['1'], xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
 
 def test_to_file(db, tmp_path):
@@ -76,7 +76,7 @@ def test_to_file(db, tmp_path):
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">TEST_1-EN.pdf</subfield></datafield></record></collection>'
     out = tmp_path / 'out.xml'
-    dlx_dl.run(connect=db, source='test', type='bib', id='1', xml=out)
+    export.run(connect=db, source='test', type='bib', id='1', xml=out)
     assert diff_texts(out.read_text(), control) == []
     
 def test_by_list(db, tmp_path, capsys):
@@ -86,23 +86,23 @@ def test_by_list(db, tmp_path, capsys):
     ids.write_text('\n'.join([str(x) for x in (1, 2)]))
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">TEST_1-EN.pdf</subfield></datafield></record><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)2</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_2</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_2</subfield><subfield code="0">(DHLAUTH)2</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield></record></collection>'
-    dlx_dl.run(connect=db, source='test', type='bib', list=ids, xml='STDOUT')
+    export.run(connect=db, source='test', type='bib', list=ids, xml='STDOUT')
     assert diff_texts(capsys.readouterr().out, control) == []
     
 def test_by_date(db, capsys):
     from xmldiff.main import diff_texts
     
     control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">TEST_1-EN.pdf</subfield></datafield></record><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)2</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_2</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_2</subfield><subfield code="0">(DHLAUTH)2</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield></record></collection>'
-    #dlx_dl.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), xml='STDOUT')
+    #export.run(connect=db, source='test', type='bib', modified_from=START.strftime('%Y-%m-%d'), xml='STDOUT')
     #assert diff_texts(capsys.readouterr().out, control) == []
      
-    #dlx_dl.run(connect=db, source='test', type='bib', modified_from=datetime.max.strftime('%Y-%m-%d'), xml='STDOUT')
+    #export.run(connect=db, source='test', type='bib', modified_from=datetime.max.strftime('%Y-%m-%d'), xml='STDOUT')
     #assert capsys.readouterr().out == '<collection></collection>'
     
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=100, xml='STDOUT')
+    export.run(connect=db, source='test', type='bib', modified_within=100, xml='STDOUT')
     #assert diff_texts(capsys.readouterr().out, control) == []
     
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=-1, xml='STDOUT')
+    export.run(connect=db, source='test', type='bib', modified_within=-1, xml='STDOUT')
     #assert capsys.readouterr().out == '<collection></collection>'
     
 @responses.activate
@@ -112,9 +112,9 @@ def test_post_and_log(db, excel_export):
             
     server = HTTPServer(('127.0.0.1', 9090), None)
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    dlx_dl.API_URL = 'http://127.0.0.1:9090'
+    export.API_URL = 'http://127.0.0.1:9090'
     
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
+    export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
     
     entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
     assert entry['record_id'] == 1
@@ -141,12 +141,12 @@ def test_modified_since_log(db, capsys):
 
     server = HTTPServer(('127.0.0.1', 9090), None)
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    dlx_dl.API_URL = 'http://127.0.0.1:9090'
+    export.API_URL = 'http://127.0.0.1:9090'
     
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
+    export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
     capsys.readouterr().out # clear stdout
     Bib().set('999', 'a', 'new').commit()
-    dlx_dl.run(connect=db, source='test', type='bib', modified_since_log=True, use_api=True, api_key='x')
+    export.run(connect=db, source='test', type='bib', modified_since_log=True, use_api=True, api_key='x')
     entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 3})
     control = '<record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)3</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="999" ind1=" " ind2=" "><subfield code="a">new</subfield></datafield></record>'
     assert diff_texts(entry['xml'], control) == []
@@ -158,12 +158,12 @@ def test_blacklist(db, capsys):
     
     server = HTTPServer(('127.0.0.1', 9090), None)
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    dlx_dl.API_URL = 'http://127.0.0.1:9090'
+    export.API_URL = 'http://127.0.0.1:9090'
     
     db['dummy']['blacklist'].insert_one({'symbol': 'TEST/1'})
     # control here has no FFT fields
     control = '<record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield></record>'
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
+    export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
     entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
     assert diff_texts(entry['xml'], control) == []
 
@@ -175,15 +175,15 @@ def test_queue(db, capsys):
     
     server = HTTPServer(('127.0.0.1', 9090), None)
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    dlx_dl.API_URL = 'http://127.0.0.1:9090'
+    export.API_URL = 'http://127.0.0.1:9090'
 
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x', queue=1)
+    export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x', queue=1)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     #assert len(data) == 1
     #assert json.loads(data[0])['record_id'] == 1
     
     time.sleep(.1)
-    dlx_dl.run(connect=db, source='test', type='bib', use_api=True, api_key='x', modified_within=0, queue=1)
+    export.run(connect=db, source='test', type='bib', use_api=True, api_key='x', modified_within=0, queue=1)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     #assert len(data) == 1
     #assert json.loads(data[0])['record_id'] == 2
@@ -191,7 +191,7 @@ def test_queue(db, capsys):
     # queued record is deleted
     time.sleep(.1)
     db['dummy']['dlx_dl_queue'].insert_one({'record_id': 42, 'source': 'test', 'type': 'bib'})
-    dlx_dl.run(connect=db, source='test', type='bib', use_api=True, api_key='x', modified_within=0, queue=1)
+    export.run(connect=db, source='test', type='bib', use_api=True, api_key='x', modified_within=0, queue=1)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     #assert len(data) == 0
     #assert db['dummy']['dlx_dl_queue'].find_one({}) == None
@@ -205,13 +205,13 @@ def test_delete(db, capsys):
 
     server = HTTPServer(('127.0.0.1', 9090), None)
     responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    dlx_dl.API_URL = 'http://127.0.0.1:9090'
+    export.API_URL = 'http://127.0.0.1:9090'
     
     bib = Bib().set('245', 'a', 'Will self destruct')
     bib.commit()
     bib.delete()
 
-    dlx_dl.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
+    export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     #assert len(data) == 3
     #assert json.loads(data[2])['record_id'] == 3
