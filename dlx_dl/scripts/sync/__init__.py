@@ -29,6 +29,7 @@ def get_args(**kwargs):
     parser.add_argument('--email', help='receive batch results by email instead of callback')
     parser.add_argument('--delete_only', action='store_true')
     parser.add_argument('--force', action='store_true')
+    parser.add_argument('--modified_since_log', action='store_true')
     
     r = parser.add_argument_group('required')
     r.add_argument('--source', required=True, help='an identity to use in the log')
