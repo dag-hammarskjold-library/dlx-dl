@@ -15,12 +15,12 @@ from bson import SON
 from dlx import DB, Config
 from dlx.marc import Query, Bib, BibSet, Auth, AuthSet, Datafield
 from dlx.file import File, Identifier
-import dlx_dl
+from dlx_dl.scripts import export
 
 API_SEARCH_URL = 'https://digitallibrary.un.org/api/v1/search'
 API_RECORD_URL = 'https://digitallibrary.un.org/api/v1/record/'
 NS = '{http://www.loc.gov/MARC21/slim}'
-LOG_COLLECTION = dlx_dl.LOG_COLLECTION
+LOG_COLLECTION = export.LOG_COLLECTION
 
 def get_args(**kwargs):
     parser = argparse.ArgumentParser(prog='dlx-dl-sync')
@@ -84,7 +84,7 @@ def run():
     args.START = datetime.now(timezone.utc)
     
     DB.connect(args.connect)
-    blacklist = DB.handle[dlx_dl.BLACKLIST_COLLECTION]
+    blacklist = DB.handle[export.BLACKLIST_COLLECTION]
     args.blacklisted = [x['symbol'] for x in blacklist.find({})]
     args.log = DB.handle[LOG_COLLECTION]
 
@@ -307,7 +307,7 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     BibSet / AuthSet
     """
     if cls == BibSet:
-        fft_symbols = dlx_dl._new_file_symbols(date_from, date_to)
+        fft_symbols = export._new_file_symbols(date_from, date_to)
     
         if len(fft_symbols) > 10000:
             raise Exception('that\'s too many file symbols to look up, sorry :(')
@@ -371,9 +371,9 @@ def export_whole_record(args, record, *, export_type):
     record = clean_values(record)
 
     if args.type == 'bib':
-        record = dlx_dl.process_bib(record, blacklisted=args.blacklisted, files_only=False)
+        record = export.process_bib(record, blacklisted=args.blacklisted, files_only=False)
     else:
-        record = dlx_dl.process_auth(record)
+        record = export.process_auth(record)
 
     return submit_to_dl(args, record, mode='insertorreplace', export_start=args.START, export_type=export_type)
 
@@ -462,7 +462,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
         
         url = field.get_value('u')
 
-        if urlparse(url).netloc not in dlx_dl.WHITELIST:
+        if urlparse(url).netloc not in export.WHITELIST:
             for s in field.subfields:
                 if s.value not in dl_record.get_values('856', s.code):
                     take_tags.add('856')
@@ -474,7 +474,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 return export_whole_record(args, dlx_record, export_type='UPDATE')
 
             fn = url.split('/')[-1]
-            fn = dlx_dl.clean_fn(fn)
+            fn = export.clean_fn(fn)
 
             # chars requiring encoding
             fn = fn.replace('%', '%25')
