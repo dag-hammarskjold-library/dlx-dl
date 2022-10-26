@@ -80,7 +80,7 @@ def get_args(**kwargs):
      
     return parser.parse_args()
     
-def run():
+def run(**kwargs):
     args = get_args()
     args.START = datetime.now(timezone.utc)
     
