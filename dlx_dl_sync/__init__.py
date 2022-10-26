@@ -8,7 +8,6 @@ from urllib.parse import urlparse, quote, unquote
 from boto3 import client as botoclient
 from botocore.exceptions import ClientError
 from math import inf
-from requests import get
 from io import StringIO
 from xml.etree import ElementTree
 from pymongo import ASCENDING as ASC, DESCENDING as DESC
@@ -116,7 +115,7 @@ def run():
         if args.type == 'auth':
             url += '&c=Authorities'
 
-        if response := get(url, headers=HEADERS):
+        if response := requests.get(url, headers=HEADERS):
             root = ElementTree.fromstring(response.text)
             col = root.find(f'{NS}collection')
             record = col.find(f'{NS}record')
@@ -165,7 +164,7 @@ def run():
             if args.type == 'auth':
                 url += '&c=Authorities'
                 
-            response = get(url, headers=HEADERS)
+            response = requests.get(url, headers=HEADERS)
             retries = 0
             
             while response.status_code != 200:
@@ -175,7 +174,7 @@ def run():
                     
                 time.sleep(5 * retries)
                 retries += 1
-                response = get(url, headers=HEADERS)
+                response = requests.get(url, headers=HEADERS)
             
             #records = (BibSet if args.type == 'bib' else AuthSet).from_xml(response.text)
             root = ElementTree.fromstring(response.text)

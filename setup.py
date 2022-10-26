@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 
 setup(
     name = 'dlx_dl',
-    version = '0.1',
+    version = '0.2',
     url = 'http://github.com/dag-hammarskjold-library/dlx-dl',
     author = 'United Nations Dag Hammarskjöld Library',
     author_email = 'library-ny@un.org',
@@ -22,7 +22,7 @@ setup(
     description = 'Export data fom DLX to DL',
     long_description = long_description,
     long_description_content_type = "text/markdown",
-    python_requires = '>=3.6',
+    python_requires = '>=3.8',
     entry_points = {
         'console_scripts': [
             'dlx-dl=dlx_dl:run',
