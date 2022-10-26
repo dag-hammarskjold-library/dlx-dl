@@ -81,7 +81,7 @@ def get_args(**kwargs):
     return parser.parse_args()
     
 def run(**kwargs):
-    args = get_args()
+    args = get_args(kwargs)
     args.START = datetime.now(timezone.utc)
     
     DB.connect(args.connect)
