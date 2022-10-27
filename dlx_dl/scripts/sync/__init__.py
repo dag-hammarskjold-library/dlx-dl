@@ -66,7 +66,7 @@ def get_args(**kwargs):
     # if run as function convert args to sys.argv
     if kwargs:
         params = ('ids', 'delete_only', 'force')
-        ids, force = [kwargs.get(x) and kwargs.pop(x) for x in params]
+        ids, delete_only, force = [kwargs.get(x) and kwargs.pop(x) for x in params]
         
         sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
         
@@ -81,7 +81,7 @@ def get_args(**kwargs):
     return parser.parse_args()
     
 def run(**kwargs):
-    args = get_args(kwargs)
+    args = get_args(**kwargs)
     args.START = datetime.now(timezone.utc)
     
     DB.connect(args.connect)
@@ -107,7 +107,7 @@ def run(**kwargs):
         pass
     elif last is None:
         raise Exception('No log data found for this source')
-    elif (datetime.now() - last['time']) > timedelta(hours=2): # skip check if more than 2 hours
+    elif (datetime.now() - (last.get('time') or datetime.min)) > timedelta(hours=2): # skip check if more than 2 hours
         print("wait time limit exceeded for last import confirmation. proceeding")
     elif last:
         pre = '035__a:(DHL)' if args.type == 'bib' else '035__a:(DHLAUTH)'

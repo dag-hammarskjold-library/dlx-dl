@@ -215,5 +215,21 @@ def test_delete(db, capsys):
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     #assert len(data) == 3
     #assert json.loads(data[2])['record_id'] == 3
+
+@responses.activate
+def test_sync(db, capsys):
+    from http.server import HTTPServer
+    from dlx.marc import Bib
+
+    responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
+    export.API_URL = 'http://127.0.0.1:9090'
+    
+    bib = Bib().set('245', 'a', 'Will self destruct')
+    bib.commit()
+    bib.delete()
+
+    sync.run(source='test', type='bib', modified_within=100)
+    data = list(filter(None, capsys.readouterr().out.split('\n')))
+    assert data
         
 ### end
