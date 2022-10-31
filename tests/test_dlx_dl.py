@@ -209,7 +209,6 @@ def test_delete(db, capsys, mock_post):
     #assert len(data) == 3
     #assert json.loads(data[2])['record_id'] == 3
 
-
 def test_sync(db, capsys, mock_get_post):
     from http.server import HTTPServer
     from dlx.marc import Bib
