@@ -87,6 +87,9 @@ def run(**kwargs):
     if isinstance(kwargs.get('connect'), MockClient):
         # required for testing 
         DB.client = kwargs['connect']
+        args.api_key = 'test'
+        args.callback_url = 'test'
+        args.nonce_key = 'test'
     else:
         DB.connect(args.connect)
 
@@ -94,7 +97,6 @@ def run(**kwargs):
     blacklist = DB.handle[export.BLACKLIST_COLLECTION]
     args.blacklisted = [x['symbol'] for x in blacklist.find({})]
     args.log = DB.handle[LOG_COLLECTION]
-
 
     HEADERS = {'Authorization': 'Token ' + args.api_key}
     
