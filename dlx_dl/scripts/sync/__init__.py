@@ -6,7 +6,7 @@ from warnings import warn
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, quote, unquote
 from boto3 import client as botoclient
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 from math import inf
 from io import StringIO
 from xml.etree import ElementTree
@@ -54,6 +54,9 @@ def get_args(**kwargs):
     def param(name):
         try:
             return ssm.get_parameter(Name=name)['Parameter']['Value']
+        except NoCredentialsError:
+            warn('in mock environment')
+            return 'mocked'
         except ClientError:
             warn('valid AWS credentials not found or unable to connect')
             return None
@@ -87,9 +90,6 @@ def run(**kwargs):
     if isinstance(kwargs.get('connect'), MockClient):
         # required for testing 
         DB.client = kwargs['connect']
-        args.api_key = 'test'
-        args.callback_url = 'test'
-        args.nonce_key = 'test'
     else:
         DB.connect(args.connect)
 
