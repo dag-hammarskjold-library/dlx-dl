@@ -10,6 +10,7 @@ from botocore.exceptions import ClientError
 from math import inf
 from io import StringIO
 from xml.etree import ElementTree
+from mongomock import MongoClient as MockClient
 from pymongo import ASCENDING as ASC, DESCENDING as DESC
 from bson import SON
 from dlx import DB, Config
@@ -82,9 +83,14 @@ def get_args(**kwargs):
     
 def run(**kwargs):
     args = get_args(**kwargs)
+
+    if isinstance(kwargs.get('connect'), MockClient):
+        # required for testing 
+        DB.client = kwargs['connect']
+    else:
+        DB.connect(args.connect)
+
     args.START = datetime.now(timezone.utc)
-    
-    DB.connect(args.connect)
     blacklist = DB.handle[export.BLACKLIST_COLLECTION]
     args.blacklisted = [x['symbol'] for x in blacklist.find({})]
     args.log = DB.handle[LOG_COLLECTION]
@@ -239,7 +245,8 @@ def run(**kwargs):
         # end
         if SEEN == TOTAL:
             print(f'updated {updated_count} records')
-            exit()
+            
+            return
 
         if updated_count > (args.limit if args.limit > 0 else 1000):
             print('Reached max exports')

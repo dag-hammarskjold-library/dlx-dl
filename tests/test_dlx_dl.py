@@ -4,8 +4,10 @@ from datetime import datetime
 from dlx_dl.scripts import export, sync
 
 os.environ['DLX_DL_TESTING'] = "true"
-
 START = datetime.now()
+export.API_URL = 'http://127.0.0.1:9090/record'
+sync.API_RECORD_URL = 'http://127.0.0.1:9090/record'
+sync.API_SEARCH_URL = 'http://127.0.0.1:9090/search' 
 
 @pytest.fixture
 @mock_s3 # this has to go after the fixture decorator
@@ -44,6 +46,21 @@ def db():
     )
 
     return DB.client
+
+@pytest.fixture
+def mock_post(scope='module', autoyield=True):
+    with responses.RequestsMock() as rsps:
+        rsps.add(responses.POST, 'http://127.0.0.1:9090/record', body='test OK')
+    
+        yield rsps 
+
+@pytest.fixture
+def mock_get_post(scope='module', autoyield=True):
+    with responses.RequestsMock() as rsps:
+        rsps.add(responses.GET, 'http://127.0.0.1:9090/search', body='<record></record>', status=200)
+        rsps.add(responses.POST, 'http://127.0.0.1:9090/record', body='test OK')
+    
+        yield rsps
     
 @pytest.fixture
 def excel_export():
@@ -105,15 +122,10 @@ def test_by_date(db, capsys):
     export.run(connect=db, source='test', type='bib', modified_within=-1, xml='STDOUT')
     #assert capsys.readouterr().out == '<collection></collection>'
     
-@responses.activate
-def test_post_and_log(db, excel_export):
+def test_post_and_log(db, excel_export, mock_post):
     from http.server import HTTPServer 
     from xmldiff.main import diff_texts
             
-    server = HTTPServer(('127.0.0.1', 9090), None)
-    responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    export.API_URL = 'http://127.0.0.1:9090'
-    
     export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
     
     entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
@@ -132,17 +144,12 @@ def test_post_and_log(db, excel_export):
     assert entry['record_type'] == 'bib'
     assert isinstance(entry['export_end'], datetime)
     
-@responses.activate
-def test_modified_since_log(db, capsys):
+def test_modified_since_log(db, capsys, mock_post):
     from http.server import HTTPServer 
     from xmldiff.main import diff_texts
     from dlx import DB
     from dlx.marc import Bib
 
-    server = HTTPServer(('127.0.0.1', 9090), None)
-    responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    export.API_URL = 'http://127.0.0.1:9090'
-    
     export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
     capsys.readouterr().out # clear stdout
     Bib().set('999', 'a', 'new').commit()
@@ -151,31 +158,22 @@ def test_modified_since_log(db, capsys):
     control = '<record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)3</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="999" ind1=" " ind2=" "><subfield code="a">new</subfield></datafield></record>'
     assert diff_texts(entry['xml'], control) == []
     
-@responses.activate
-def test_blacklist(db, capsys):
+
+def test_blacklist(db, capsys, mock_post):
     from http.server import HTTPServer 
     from xmldiff.main import diff_texts
-    
-    server = HTTPServer(('127.0.0.1', 9090), None)
-    responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    export.API_URL = 'http://127.0.0.1:9090'
-    
+
     db['dummy']['blacklist'].insert_one({'symbol': 'TEST/1'})
     # control here has no FFT fields
     control = '<record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield></record>'
     export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
     entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
     assert diff_texts(entry['xml'], control) == []
-
-@responses.activate   
-def test_queue(db, capsys):
+  
+def test_queue(db, capsys, mock_post):
     import time, json
     from http.server import HTTPServer 
     from xmldiff.main import diff_texts
-    
-    server = HTTPServer(('127.0.0.1', 9090), None)
-    responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    export.API_URL = 'http://127.0.0.1:9090'
 
     export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x', queue=1)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
@@ -195,17 +193,12 @@ def test_queue(db, capsys):
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     #assert len(data) == 0
     #assert db['dummy']['dlx_dl_queue'].find_one({}) == None
-    
-@responses.activate   
-def test_delete(db, capsys):
+   
+def test_delete(db, capsys, mock_post):
     import json
     from http.server import HTTPServer 
     from xmldiff.main import diff_texts
     from dlx.marc import Bib
-
-    server = HTTPServer(('127.0.0.1', 9090), None)
-    responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    export.API_URL = 'http://127.0.0.1:9090'
     
     bib = Bib().set('245', 'a', 'Will self destruct')
     bib.commit()
@@ -216,19 +209,16 @@ def test_delete(db, capsys):
     #assert len(data) == 3
     #assert json.loads(data[2])['record_id'] == 3
 
-@responses.activate
-def test_sync(db, capsys):
+
+def test_sync(db, capsys, mock_get_post):
     from http.server import HTTPServer
     from dlx.marc import Bib
-
-    responses.add(responses.POST, 'http://127.0.0.1:9090', body='test OK')
-    export.API_URL = 'http://127.0.0.1:9090'
     
     bib = Bib().set('245', 'a', 'Will self destruct')
     bib.commit()
     bib.delete()
 
-    sync.run(source='test', type='bib', modified_within=100)
+    sync.run(connect=db, source='test', type='bib', modified_within=100)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     assert data
         
