@@ -452,7 +452,6 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 s.value = ''
 
             delete_fields.append(field)
-        
         elif len(dl_record.get_fields(field.tag)) > len(dlx_record.get_fields(field.tag)):
             if field.get_subfield('0'):
                 field.subfields.remove(field.get_subfield('0'))
