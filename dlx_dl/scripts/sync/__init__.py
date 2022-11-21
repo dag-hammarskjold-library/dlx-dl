@@ -432,7 +432,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
         if taken.get(field.tag):
             continue
 
-    # tag/indicator combo from dl not in dlX
+    # fields from dl not in dlx
     delete_fields = []
 
     for field in dl_record.fields:
@@ -452,6 +452,17 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 s.value = ''
 
             delete_fields.append(field)
+        elif len(dl_record.get_fields(field.tag)) > len(dlx_record.get_fields(field.tag)):
+            if field.get_subfield('0'):
+                field.subfields.remove(field.get_subfield('0'))
+
+            if field.to_mrk() not in [x.to_mrk() for x in dlx_record.fields]:
+                print(str(dl_record.id) + ' TO DELETE: ' + field.to_mrk())
+
+                for s in field.subfields:
+                    s.value = '' 
+
+                delete_fields.append(field)
 
     # duplicated fields
     seen = []
