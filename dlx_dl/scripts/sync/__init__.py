@@ -457,12 +457,9 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 field.subfields.remove(field.get_subfield('0'))
 
             if field.to_mrk() not in [x.to_mrk() for x in dlx_record.fields]:
-                print(str(dl_record.id) + ' TO DELETE: ' + field.to_mrk())
+                print(str(dl_record.id) + ' TO DELETE SPECIAL: ' + field.to_mrk())
 
-                for s in field.subfields:
-                    s.value = '' 
-
-                delete_fields.append(field)
+                take_tags.add(field.tag)
 
     # duplicated fields
     seen = []
