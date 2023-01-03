@@ -1,7 +1,7 @@
 """Sync DL from DLX"""
 
 from operator import index
-import sys, os, re, json, time, argparse, unicodedata, requests
+import sys, os, re, json, time, argparse, unicodedata, requests, pytz
 from warnings import warn
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, quote, unquote
@@ -86,7 +86,7 @@ def get_args(**kwargs):
     
 def run(**kwargs):
     args = get_args(**kwargs)
-
+    
     if isinstance(kwargs.get('connect'), MockClient):
         # required for testing 
         DB.client = kwargs['connect']
@@ -152,7 +152,7 @@ def run(**kwargs):
             dl_last = str(int(float(record.get_value('005'))))
             dl_last = datetime.strptime(dl_last, '%Y%m%d%H%M%S')
             # 005 is in local time
-            dl_last += timedelta(hours=4 if dl_last.dst else 5)
+            dl_last += timedelta(hours=4 if pytz.timezone('US/Eastern').localize(dl_last).dst() else 5)
 
             if not dl_last > last['time']:
                 print(f'last update not cleared in DL yet ({args.type}# {last["record_id"]} @ {last["time"]})')
