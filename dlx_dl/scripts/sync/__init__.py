@@ -562,7 +562,10 @@ def compare_and_update(args, *, dlx_record, dl_record):
             record.fields += dlx_record.get_fields(tag)
 
         record.fields += delete_fields
-        record.fields.append(dlx_record.get_field('998'))
+        _998 = dlx_record.get_field('998')
+
+        if _998:
+            record.fields.append(_998)
 
         return submit_to_dl(args, record, mode='correct', export_start=args.START, export_type='UPDATE')
 
