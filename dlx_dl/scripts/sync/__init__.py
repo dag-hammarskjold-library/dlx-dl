@@ -519,8 +519,8 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 return export_whole_record(args, dlx_record, export_type='UPDATE')
 
     # official doc files
-    #symbols = dlx_record.get_values('191', 'a') + dlx_record.get_values('191', 'z') if args.type == 'bib' else []
-    symbols = dlx_record.get_values('191', 'a') if args.type == 'bib' else []
+    symbols = (dlx_record.get_values('191', 'a') + dlx_record.get_values('191', 'z')) if args.type == 'bib' else []
+    #symbols = dlx_record.get_values('191', 'a') if args.type == 'bib' else []
     
     for symbol in set(symbols):
         if symbol == '' or symbol == ' ' or symbol == '***': # note: clean these up in db
