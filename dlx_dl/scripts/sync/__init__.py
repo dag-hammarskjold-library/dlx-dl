@@ -399,8 +399,13 @@ def compare_and_update(args, *, dlx_record, dl_record):
         # skip fields
         if re.match('^00', field.tag):
             continue
-        elif field.tag in ('035', '856', '949', '980', '998'):
+        elif field.tag in ('035', '949', '980', '998'):
             continue
+        elif field.tag == '856':
+            url = field.get_value('u')
+            
+            if urlparse(url).netloc in export.WHITELIST:
+                continue
         
         # scan subfield values
         for subfield in field.subfields:
@@ -441,8 +446,11 @@ def compare_and_update(args, *, dlx_record, dl_record):
         # skip fields
         if re.match('^00', field.tag):
             continue
-        elif field.tag in ('035', '856', '949', '980'):
+        elif field.tag in ('035', '949', '980'):
             continue
+        elif field.tag == '856':
+            if 'digitallibrary.un.org' in field.get_value('u'):
+                continue
 
         if field.tag + ''.join(field.indicators) not in [x.tag + ''.join(x.indicators) for x in dlx_record.datafields]:
             print(str(dl_record.id) + ' TO DELETE: ' + field.to_mrk())
