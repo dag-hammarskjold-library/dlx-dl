@@ -163,7 +163,7 @@ def run(**kwargs):
         BATCH.append(record)
         SEEN += 1
         
-        # process batch
+        # process DL batch
         if len(BATCH) in (BATCH_SIZE, TOTAL) or SEEN == TOTAL:
             DL_BATCH = []
             pre = '035__a:(DHL)' if args.type == 'bib' else '035__a:(DHLAUTH)'
@@ -389,25 +389,32 @@ def export_whole_record(args, record, *, export_type):
 
 def compare_and_update(args, *, dlx_record, dl_record):
     dlx_record = clean_values(dlx_record)
+    
+    skip_fields = ['035', '856', '949', '980', '998']
+    dlx_fields = list(filter(lambda x: x.tag not in skip_fields, dlx_record.datafields))
+    #dlx_values = [subfield.value for field in dlx_fields for subfield in field.subfields]
+    dl_fields = list(filter(lambda x: x.tag not in skip_fields, dl_record.datafields))
+    #dl_values = [subfield.value for field in dl_fields for subfield in filter(lambda x: x.code != '0', field.subfields)]
+    
+    take_tags = set()
 
     # values from dlx not in dl
-    take_tags = set()
-    
     for field in dlx_record.fields:
         taken = {}
 
         # skip fields
         if re.match('^00', field.tag):
             continue
-        elif field.tag in ('035', '949', '980', '998'):
-            continue
         elif field.tag == '856':
             url = field.get_value('u')
             
             if urlparse(url).netloc in export.WHITELIST:
                 continue
+        elif field.tag in skip_fields:
+            continue
         
         # scan subfield values
+        
         for subfield in field.subfields:
             if field.tag == '191' and subfield.code in ('q', 'r'):
                 continue
@@ -415,27 +422,33 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 continue
             
             # filter out fields with same tag/indicator combo
-            values = []
             field.ind1 = ' ' if field.ind1 == '_' else field.ind1
             field.ind2 = ' ' if field.ind2 == '_' else field.ind2
-
-            for f in filter(lambda x: x.tag == field.tag, dl_record.datafields):
-                if f.indicators == field.indicators: 
-                    for s in f.subfields:
-                        values.append(s.value)
+            dl_values = dl_record.get_values(field.tag, subfield.code)
 
             # ignore unicode differences for now
-            check_values = unicodedata.normalize('NFD', subfield.value) in [unicodedata.normalize('NFD', x) for x in values]
+            def normalize(x): return unicodedata.normalize('NFD', x)
+
+            check_values = normalize(subfield.value) in [normalize(x) for x in dl_values]
             check_tags = field.tag + ''.join(field.indicators) in [x.tag + ''.join(x.indicators) for x in dl_record.datafields]
 
             if not check_values or not check_tags:
-                print(f'{dlx_record.id}: {field.tag}  {field.indicators} ${subfield.code}: {subfield.value} X {dl_record.get_values(field.tag, subfield.code)}')
+                print(f'{dlx_record.id} UPDATE: {field.tag}  {field.indicators} ${subfield.code}: {subfield.value} X {dl_record.get_values(field.tag, subfield.code)}')
                 take_tags.add(field.tag)
                 taken[field.tag] = True
                 break
             
         if taken.get(field.tag):
             continue
+
+    # values in dl not in dlx (probably edited)
+    for field in dl_fields:
+        for subfield in filter(lambda x: x.code != '0', field.subfields):
+            dlx_values = dlx_record.get_values(field.tag, subfield.code)
+
+            if subfield.value not in dlx_values and field.tag not in take_tags:
+                print(f'{dlx_record.id} UPDATE: {field.tag}  {field.indicators} ${subfield.code}: {subfield.value} XX {dlx_record.get_values(field.tag, subfield.code)}')
+                take_tags.add(field.tag)
 
     # fields from dl not in dlx
     delete_fields = []
@@ -446,7 +459,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
         # skip fields
         if re.match('^00', field.tag):
             continue
-        elif field.tag in ('035', '949', '980'):
+        elif field.tag in ('035', '949', '980', '998'):
             continue
         elif field.tag == '856':
             if 'digitallibrary.un.org' in field.get_value('u'):
