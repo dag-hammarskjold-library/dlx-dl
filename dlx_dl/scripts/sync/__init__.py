@@ -2,6 +2,7 @@
 
 from operator import index
 import sys, os, re, json, time, argparse, unicodedata, requests, pytz
+from copy import deepcopy
 from warnings import warn
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, quote, unquote
@@ -16,12 +17,15 @@ from bson import SON
 from dlx import DB, Config
 from dlx.marc import Query, Bib, BibSet, Auth, AuthSet, Datafield
 from dlx.file import File, Identifier
+from dlx.util import Tokenizer
 from dlx_dl.scripts import export
 
 API_SEARCH_URL = 'https://digitallibrary.un.org/api/v1/search'
 API_RECORD_URL = 'https://digitallibrary.un.org/api/v1/record/'
 NS = '{http://www.loc.gov/MARC21/slim}'
 LOG_COLLECTION = export.LOG_COLLECTION
+LANGMAP = {'AR': 'العربية', 'ZH': '中文', 'EN': 'English', 'FR': 'Français', 'RU': 'Русский', 'ES': 'Español', 'T': 'test'}
+LANGMAP_REVERSE = {Tokenizer.scrub(v).replace(' ', ''): k for k, v in LANGMAP.items()}
 
 def get_args(**kwargs):
     parser = argparse.ArgumentParser(prog='dlx-dl-sync')
@@ -380,6 +384,7 @@ def export_whole_record(args, record, *, export_type):
     # perform necessary transformations
     record = clean_values(record)
 
+    # no comp with DL data performed
     if args.type == 'bib':
         record = export.process_bib(record, blacklisted=args.blacklisted, files_only=False)
     else:
@@ -387,10 +392,25 @@ def export_whole_record(args, record, *, export_type):
 
     return submit_to_dl(args, record, mode='insertorreplace', export_start=args.START, export_type=export_type)
 
+def delete_file(args, record, filename):
+    name, extension = os.path.splitext(filename)
+    deletion_record = Bib()
+    deletion_record.id = record.id
+    deletion_record.set('035', 'a', f'(DHL){record.id}' if args.type == 'bib' else f'(DHLAUTH){record.id}')
+    deletion_record.set('FFT', 'n', filename)
+    deletion_record.set('FFT', 'f', extension)
+    deletion_record.set('FFT', 't', 'EXPUNGE')
+
+    submit_to_dl(args, deletion_record, mode='correct', export_start=args.START, export_type='UPDATE')
+
 def compare_and_update(args, *, dlx_record, dl_record):
     dlx_record = clean_values(dlx_record)
+
+    if dl_record.get_field('980') is None:
+        print(f'{dlx_record.id} MISSING 980')
+        export_whole_record(args, dlx_record, export_type='UPDATE')
     
-    skip_fields = ['035', '856', '949', '980', '998']
+    skip_fields = ['035', '909', '949', '980', '998']
     dlx_fields = list(filter(lambda x: x.tag not in skip_fields, dlx_record.datafields))
     #dlx_values = [subfield.value for field in dlx_fields for subfield in field.subfields]
     dl_fields = list(filter(lambda x: x.tag not in skip_fields, dl_record.datafields))
@@ -414,7 +434,6 @@ def compare_and_update(args, *, dlx_record, dl_record):
             continue
         
         # scan subfield values
-        
         for subfield in field.subfields:
             if field.tag == '191' and subfield.code in ('q', 'r'):
                 continue
@@ -441,8 +460,21 @@ def compare_and_update(args, *, dlx_record, dl_record):
         if taken.get(field.tag):
             continue
 
+        # last resort
+        # remove $0
+        dl_fields_filtered = deepcopy(dl_fields)
+
+        for xfield in dl_fields_filtered:
+            xfield.subfields = list(filter(lambda x: x.code != '0', field.subfields))
+
+        if field.to_mrk() not in [x.to_mrk() for x in dl_fields_filtered]:
+            take_tags.add(field.tag)
+            continue
+
     # values in dl not in dlx (probably edited)
     for field in dl_fields:
+        if field.tag == '856' and 'digitallibrary.un.org' in field.get_value('u'): continue
+
         for subfield in filter(lambda x: x.code != '0', field.subfields):
             dlx_values = dlx_record.get_values(field.tag, subfield.code)
 
@@ -459,11 +491,38 @@ def compare_and_update(args, *, dlx_record, dl_record):
         # skip fields
         if re.match('^00', field.tag):
             continue
-        elif field.tag in ('035', '949', '980', '998'):
+        elif field.tag in ('035', '909', '949', '980', '998'):
             continue
         elif field.tag == '856':
             if 'digitallibrary.un.org' in field.get_value('u'):
-                continue
+                # files added by FFT
+                # check if the DL files are supposed to be there
+                # $y = $3
+                url = field.get_value('u')
+                filename = url.split('/')[-1]
+
+                if all(urlparse(x).netloc in export.WHITELIST for x in dlx_record.get_values('856')):
+                    continue
+                elif filename in [x.split('/')[-1] for x in dlx_record.get_values('856', 'u')]:
+                    # corresponding link appears to be in dlx
+                    continue
+                else:
+                    # does not appear to be from a whitelisted link
+                    # check dlx files
+                    symbol = dl_record.get_value('191', 'a') or dl_record.get_value('191', 'z')
+
+                    if symbol and symbol != '***':
+                        # lang is in $y
+                        key = Tokenizer.scrub(field.get_value('y')).replace(' ', '')
+                        
+                        if LANGMAP_REVERSE.get(key):
+                            lang = LANGMAP_REVERSE[key]
+
+                            if File.latest_by_identifier_language(Identifier('symbol', symbol), lang) is None:
+                                print(f'{dlx_record.id}: FILE IN DL NOT IN DLX: {symbol} {lang}')
+                                #delete_file(args, dl_record, filename=filename)
+            
+            continue
 
         if field.tag + ''.join(field.indicators) not in [x.tag + ''.join(x.indicators) for x in dlx_record.datafields]:
             print(str(dl_record.id) + ' TO DELETE: ' + field.to_mrk())
@@ -567,7 +626,8 @@ def compare_and_update(args, *, dlx_record, dl_record):
                     
                     return export_whole_record(args, dlx_record, export_type='UPDATE')
 
-
+    # last resort
+    
     # request params
     headers = {'Authorization': 'Token ' + args.api_key, 'Content-Type': 'application/xml; charset=utf-8'}
     nonce = {'type': args.type, 'id': dlx_record.id, 'key': args.nonce_key}
