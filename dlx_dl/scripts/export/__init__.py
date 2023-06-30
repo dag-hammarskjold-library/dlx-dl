@@ -78,7 +78,8 @@ def get_args(**kwargs):
         return None if os.environ.get('DLX_DL_TESTING') else ssm.get_parameter(Name=name)['Parameter']['Value'] 
     
     c = parser.add_argument_group('credentials', description='these arguments are automatically supplied by AWS SSM if AWS credentials are configured')
-    c.add_argument('--connect', default=param('connect-string'), help='MongoDB connection string')
+    c.add_argument('--connect', default=param('prodISSU-admin-connect-string'), help='MongoDB connection string')
+    c.add_argument('--db', default='undlFiles')
     c.add_argument('--api_key', help='UNDL-issued api key', default=param('undl-dhl-metadata-api-key'))
     c.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.", default=param('undl-callback-url'))
     c.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.', default=param('undl-callback-nonce'))
@@ -110,7 +111,7 @@ def run(**kwargs):
         # for testing 
         DB.client = kwargs['connect']
     else:
-        DB.connect(args.connect)
+        DB.connect(args.connect, database=args.db)
 
     log = DB.handle[LOG_COLLECTION]
     queue = DB.handle[QUEUE_COLLECTION]
