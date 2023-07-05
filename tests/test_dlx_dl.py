@@ -7,7 +7,7 @@ os.environ['DLX_DL_TESTING'] = "true"
 START = datetime.now()
 export.API_URL = 'http://127.0.0.1:9090/record'
 sync.API_RECORD_URL = 'http://127.0.0.1:9090/record'
-sync.API_SEARCH_URL = 'http://127.0.0.1:9090/search' 
+sync.API_SEARCH_URL = 'http://127.0.0.1:9090/search'
 
 @pytest.fixture
 @mock_s3 # this has to go after the fixture decorator
@@ -16,7 +16,7 @@ def db():
     from dlx.marc import Bib, Auth
     from dlx.file import S3, File, Identifier
     from tempfile import TemporaryFile
-    
+
     DB.connect('mongomock://localhost') # ? does mock connection create a fresh db ?
     
     DB.bibs.drop()
@@ -122,13 +122,14 @@ def test_by_date(db, capsys):
     export.run(connect=db, source='test', type='bib', modified_within=-1, xml='STDOUT')
     #assert capsys.readouterr().out == '<collection></collection>'
     
-def test_post_and_log(db, excel_export, mock_post):
+def test_post_and_log(db, capsys, excel_export, mock_post):
     from http.server import HTTPServer 
     from xmldiff.main import diff_texts
-            
+    from dlx import DB
+
     export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
-    
-    entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
+
+    entry = DB.handle['dlx_dl_log'].find_one({})
     assert entry['record_id'] == 1
     assert entry['response_code'] == 200
     assert entry['response_text'] == 'test OK'
@@ -138,9 +139,9 @@ def test_post_and_log(db, excel_export, mock_post):
     control = '<record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">TEST_1-EN.pdf</subfield></datafield></record>'
     assert diff_texts(entry['xml'], control) == []
     
-    entry = db['dummy']['dlx_dl_log'].find_one({'source': 'test'})
+    entry = DB.handle['dlx_dl_log'].find_one({'source': 'test'})
     assert isinstance(entry['export_start'], datetime)
-    entry = db['dummy']['dlx_dl_log'].find_one({'source': 'test', 'export_end': {'$exists': 1}})
+    entry = DB.handle['dlx_dl_log'].find_one({'source': 'test', 'export_end': {'$exists': 1}})
     assert entry['record_type'] == 'bib'
     assert isinstance(entry['export_end'], datetime)
     
@@ -154,20 +155,20 @@ def test_modified_since_log(db, capsys, mock_post):
     capsys.readouterr().out # clear stdout
     Bib().set('999', 'a', 'new').commit()
     export.run(connect=db, source='test', type='bib', modified_since_log=True, use_api=True, api_key='x')
-    entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 3})
+    entry = DB.handle['dlx_dl_log'].find_one({'record_id': 3})
     control = '<record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)3</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="999" ind1=" " ind2=" "><subfield code="a">new</subfield></datafield></record>'
     assert diff_texts(entry['xml'], control) == []
     
-
 def test_blacklist(db, capsys, mock_post):
+    from dlx import DB
     from http.server import HTTPServer 
     from xmldiff.main import diff_texts
 
-    db['dummy']['blacklist'].insert_one({'symbol': 'TEST/1'})
+    DB.handle['blacklist'].insert_one({'symbol': 'TEST/1'})
     # control here has no FFT fields
     control = '<record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)1</subfield></datafield><datafield tag="191" ind1=" " ind2=" "><subfield code="a">TEST/1</subfield></datafield><datafield tag="245" ind1=" " ind2=" "><subfield code="a">title_1</subfield></datafield><datafield tag="700" ind1=" " ind2=" "><subfield code="a">name_1</subfield><subfield code="0">(DHLAUTH)1</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield></record>'
     export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x')
-    entry = db['dummy']['dlx_dl_log'].find_one({'record_id': 1})
+    entry = DB.handle['dlx_dl_log'].find_one({'record_id': 1})
     assert diff_texts(entry['xml'], control) == []
   
 def test_queue(db, capsys, mock_post):
