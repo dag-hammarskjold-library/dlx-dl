@@ -120,8 +120,8 @@ def run(**kwargs):
         pass
     elif last is None:
         raise Exception('No log data found for this source')
-    elif (datetime.now() - (last.get('time') or datetime.min)) > timedelta(hours=2): # skip check if more than 2 hours
-        print("wait time limit exceeded for last import confirmation. proceeding")
+    #elif (datetime.now() - (last.get('time') or datetime.min)) > timedelta(hours=2): # skip check if more than 2 hours
+    #    print("wait time limit exceeded for last import confirmation. proceeding")
     elif last:
         pre = '035__a:(DHL)' if args.type == 'bib' else '035__a:(DHLAUTH)'
         url = f'{API_SEARCH_URL}?search_id=&p={pre}{last["record_id"]}&format=xml'
@@ -160,7 +160,7 @@ def run(**kwargs):
             dl_last += timedelta(hours=4 if pytz.timezone('US/Eastern').localize(dl_last).dst() else 5)
 
             if not dl_last > last['time']:
-                print(f'last update not cleared in DL yet ({args.type}# {last["record_id"]} @ {last["time"]})')
+                print(f'last update not cleared in DL yet (UPDATE) ({args.type}# {last["record_id"]} @ {last["time"]})')
                 exit()
 
     # cycle through records in batches    
