@@ -1,0 +1,2 @@
+../. # installs dlx-dl from the directory above
+python-lambda==11.8.0
