@@ -16,9 +16,7 @@ setup(
     license = 'http://www.opensource.org/licenses/bsd-license.php',
     packages = find_packages(exclude=['test']),
     test_suite = 'tests',
-    install_requires = [
-        'dlx @ git+https://github.com/dag-hammarskjold-library/dlx#egg=dlx'
-    ],
+    install_requires = requirements,
     description = 'Export data fom DLX to DL',
     long_description = long_description,
     long_description_content_type = "text/markdown",
