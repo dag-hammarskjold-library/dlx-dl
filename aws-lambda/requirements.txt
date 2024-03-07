@@ -1,2 +1,2 @@
 ../. # installs dlx-dl from the directory above
-python-lambda==11.8.0
+python-lambda @ git+https://github.com/nficano/python-lambda@2f9f17a5c5993e65ee2b61d06f29ed5a6689d337
