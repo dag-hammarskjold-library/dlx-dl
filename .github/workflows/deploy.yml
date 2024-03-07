@@ -1,6 +1,6 @@
 on:
-  push:
-    branches: [ master ]
+  release:
+    types: [ released ]
 
 jobs:
   deploy-Lambda-function:
