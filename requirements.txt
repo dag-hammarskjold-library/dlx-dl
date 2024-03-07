@@ -6,7 +6,7 @@ cffi==1.15.1
 charset-normalizer==2.1.1
 click==8.1.3
 cryptography==41.0.2
-dlx @ git+https://github.com/dag-hammarskjold-library/dlx@9f8100087561dbade56a47043371d56b9124b1d6
+dlx @ git+https://github.com/dag-hammarskjold-library/dlx@b4f554c454449f23850941af53debd605fc033b6
 idna==3.4
 Jinja2==3.1.2
 jmespath==1.0.1
