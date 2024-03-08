@@ -30,13 +30,13 @@ def get_args(**kwargs):
     parser = argparse.ArgumentParser(prog='dlx-dl-sync')
     
     parser.add_argument('--email', help='receive batch results by email instead of callback')
-    #parser.add_argument('--delete_only', action='store_true')
     parser.add_argument('--force', action='store_true')
     parser.add_argument('--modified_since_log', action='store_true')
     parser.add_argument('--limit', help='limit the number of exports', type=int, default=1000)
     parser.add_argument('--time_limit', help='runtime limit in seconds', type=int, default=600)
     parser.add_argument('--queue', action='store_true', help='try to export ercords in queue and add to queue if export exceeds limits')
     parser.add_argument('--delete_only', action='store_true')
+    parser.add_argument('--use_api', action='store_true')
 
     r = parser.add_argument_group('required')
     r.add_argument('--source', required=True, help='an identity to use in the log')
