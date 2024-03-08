@@ -74,20 +74,17 @@ def get_args(**kwargs):
     c.add_argument('--callback_url', help="A URL that can receive the results of a submitted task.", default=param('undl-callback-url'))
     c.add_argument('--nonce_key', help='A validation key that will be passed to and from the UNDL API.', default=param('undl-callback-nonce'))
     
-    # if run as function convert args to sys.argv
+    # if run as function convert args to sys.argv so they can be parsed by ArgumentParser
     if kwargs:
-        params = ('ids', 'delete_only', 'force')
-        ids, delete_only, force = [kwargs.get(x) and kwargs.pop(x) for x in params]
-        
-        sys.argv[1:] = ['--{}={}'.format(key, val) for key, val in kwargs.items()]
-        
-        # boolean args
-        if force: sys.argv.append('--modified_since_log')
-
-        # list args
-        if ids:
-            sys.argv.append('--ids')
-            sys.argv += ids
+        for key, val in kwargs.items():
+            if val == True:
+                # boolean args
+                sys.argv.append(f'--{key}')
+            elif isinstance(val, list):
+                sys.argv.append(f'--{key}')
+                sys.argv += val
+            else:
+                sys.argv.append(f'--{key}={val}')
      
     return parser.parse_args()
     

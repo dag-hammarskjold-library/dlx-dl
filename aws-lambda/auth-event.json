@@ -1,5 +1,6 @@
 {
     "source": "dlx-dl-lambda",
     "type": "auth",
-    "modified_within": 86400
+    "modified_within": 86400,
+    "queue": true
 }
