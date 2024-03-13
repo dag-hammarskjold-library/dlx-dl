@@ -390,7 +390,7 @@ def get_records(args, log=None, queue=None):
         qids = [x['record_id'] for x in queue.find({'type': args.type})]
         print(f'Taking {len(qids)} from queue')
         q_args, q_kwargs = records.query_params
-        records = cls.from_query({'$or': [{'_id': {'$in': list(qids)}}, q_args[0]]}, sort=(['updated', ASC]))
+        records = cls.from_query({'$or': [{'_id': {'$in': list(qids)}}, q_args[0]]}, sort=[('updated', ASC)])
 
     return records
     
