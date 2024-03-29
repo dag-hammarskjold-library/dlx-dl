@@ -1,4 +1,3 @@
-from fileinput import filename
 import os, sys, math, re, requests, json
 from io import StringIO
 import boto3
