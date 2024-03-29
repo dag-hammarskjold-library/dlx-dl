@@ -1,3 +1,4 @@
+from fileinput import filename
 import os, sys, math, re, requests, json
 from io import StringIO
 import boto3
@@ -328,6 +329,7 @@ def process_bib(bib, *, blacklisted, files_only):
     
     bib.delete_field('005')
     bib = _035(bib)
+    bib = _561(bib)
     bib = _856(bib)
     
     if bib.get_value('980', 'a') == 'DELETED':
@@ -381,6 +383,34 @@ def _035(record):
     
     return record
     
+def _561(bib):
+    uris = bib.get_values('561', 'u')
+    place, seen = 0, []
+
+    for uri in uris:
+        if files := list(File.find_by_identifier(Identifier('uri', uri))):
+            latest = sorted(files, key=lambda x: x.timestamp, reverse=True)[0]
+            _fft = Datafield('FFT', record_type='bib')
+            _fft.set('a', latest.uri)
+    
+            old_fn = latest.filename if latest.filename else uri.split('/')[-1]
+            new_fn = clean_fn(old_fn)
+            parts = new_fn.split('.')
+            base = ''.join(parts[0:-1])
+
+            if base in seen:
+                # files can't have the same base name regardless of extension
+                ext = parts[-1]
+                new_fn = f'{base}_{place}.{ext}'
+            else:
+                seen.append(base)
+            
+            _fft.set('n', new_fn)
+            bib.fields.append(_fft)
+            place += 1
+
+    return bib
+
 def _856(bib):
     place = len(bib.get_fields('FFT'))
     seen = []
@@ -390,6 +420,7 @@ def _856(bib):
         parsed = urlparse(url)
         
         if parsed.netloc in WHITELIST:
+            # whitelist contains domains of file urls to create FFTs from
             url_path = parsed.path.rstrip()
             
             if unquote(url_path) == url_path:
@@ -402,6 +433,7 @@ def _856(bib):
             base = ''.join(parts[0:-1])
 
             if base in seen:
+                # files can't have the same base name regardless of extension
                 ext = parts[-1]
                 new_fn = f'{base}_{place}.{ext}'
             else:

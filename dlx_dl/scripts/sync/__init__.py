@@ -310,7 +310,7 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
         else {'updated': criteria}
     
     # sort to ensure latest updates are checked first
-    rset = cls.from_query(query, sort=[('updated', DESC)])
+    rset = cls.from_query(query, sort=[('updated', DESC)], collation=Config.marc_index_default_collation)
 
     return rset
     
@@ -378,10 +378,10 @@ def get_records(args, log=None, queue=None):
             records = cls.from_query({'_id': {'$in': ids}})
     elif args.query:
         query = args.query.replace('\'', '"')
-        records = cls.from_query(json.loads(query))
+        records = cls.from_query(json.loads(query), collation=Config.marc_index_default_collation)
     elif args.querystring:
         query = Query.from_string(args.querystring, record_type=args.type)
-        records = cls.from_query(query)
+        records = cls.from_query(query, collation=Config.marc_index_default_collation)
     else:
         raise Exception('One of the criteria arguments is required')
 
@@ -631,6 +631,18 @@ def compare_and_update(args, *, dlx_record, dl_record):
 
                 return export_whole_record(args, dlx_record, export_type='UPDATE')
 
+    # records with file URI in 561
+    uris = dlx_record.get_values('561', 'u')
+
+    for uri in uris:
+        if files := list(File.find_by_identifier(Identifier('uri', uri))):
+            latest = sorted(files, key=lambda x: x.timestamp, reverse=True)[0]
+             
+        else:
+            pass #print(bib.id)
+
+
+    
     # official doc files
     symbols = (dlx_record.get_values('191', 'a') + dlx_record.get_values('191', 'z')) if args.type == 'bib' else []
     #symbols = dlx_record.get_values('191', 'a') if args.type == 'bib' else []
