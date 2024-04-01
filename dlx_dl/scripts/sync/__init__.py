@@ -543,15 +543,16 @@ def compare_and_update(args, *, dlx_record, dl_record):
                     # does not appear to be from a whitelisted link
                     # check dlx files
                     symbol = dl_record.get_value('191', 'a') or dl_record.get_value('191', 'z')
+                    uri = dl_record.get_value('561', 'u')
 
-                    if symbol and symbol != '***':
+                    if (symbol and symbol != '***') or (uri and uri != '***'):
                         # lang is in $y
                         key = Tokenizer.scrub(field.get_value('y')).replace(' ', '')
                         
                         if LANGMAP_REVERSE.get(key):
                             lang = LANGMAP_REVERSE[key]
 
-                            if File.latest_by_identifier_language(Identifier('symbol', symbol), lang) is None:
+                            if File.latest_by_identifier_language(Identifier('symbol', symbol), lang) is None or File.latest_by_identifier_language(Identifier('uri', uri), lang) is None:
                                 print(f'{dlx_record.id}: FILE IN DL NOT IN DLX: {symbol} {lang}')
                                 #delete_file(args, dl_record, filename=filename)
             
@@ -633,6 +634,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
 
     # official doc files
     symbols = (dlx_record.get_values('191', 'a') + dlx_record.get_values('191', 'z')) if args.type == 'bib' else []
+    uris = (dlx_record.get_values('561', 'u')) if args.type == 'bib' else []
     #symbols = dlx_record.get_values('191', 'a') if args.type == 'bib' else []
     
     for symbol in set(symbols):
@@ -641,6 +643,30 @@ def compare_and_update(args, *, dlx_record, dl_record):
            
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             if f := File.latest_by_identifier_language(Identifier('symbol', symbol), lang):
+                field = next(filter(lambda x: re.search(f'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
+                
+                if field:
+                    try:
+                        size = int(field.get_value('s'))
+                    except ValueError:
+                        size = 0
+
+                    if size != f.size:
+                        print(f'{dlx_record.id}: FILE SIZE NOT MATCHING - {symbol}-{lang}')
+                        #print([size, f.to_dict()])
+                        return export_whole_record(args, dlx_record, export_type='UPDATE')
+
+                if field is None and 'RES' not in dlx_record.get_values('091', 'a') and symbol not in args.blacklisted:
+                    print(f'{dlx_record.id}: FILE NOT FOUND - {symbol}-{lang}')
+                    
+                    return export_whole_record(args, dlx_record, export_type='UPDATE')
+                
+    for uri in set(uris):
+        if uri == '' or uri == ' ' or uri == '***': # note: clean these up in db
+            continue
+           
+        for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
+            if f := File.latest_by_identifier_language(Identifier('uri', uri), lang):
                 field = next(filter(lambda x: re.search(f'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
                 
                 if field:

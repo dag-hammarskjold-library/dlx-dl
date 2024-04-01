@@ -490,13 +490,15 @@ def _new_file_symbols(date_from, date_to=None):
     
 def _fft_from_files(bib):
     symbols = bib.get_values('191', 'a') + bib.get_values('191', 'z')
+    uris=bib.get_values('561','u')
     
     seen = []
     
     for symbol in set(symbols):
         if symbol == '' or symbol == ' ' or symbol == '***': # note: clean these up in db
+            valid_symbol=0 # in case both symbol and uri is included
             continue
-           
+        valid_symbol=1   
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             xfile = File.latest_by_identifier_language(Identifier('symbol', symbol), lang)
             
@@ -505,6 +507,23 @@ def _fft_from_files(bib):
                 field.set('a', 'https://' + xfile.uri)
                 field.set('d', ISO_STR[lang])
                 field.set('n', encode_fn(symbols if len(symbols) <= 3 else symbols[0:1], lang, 'pdf'))
+                bib.fields.append(field)
+
+                seen.append(lang)
+
+    for uri in set(uris):
+        if uri == '' or uri == ' ' or uri == '***' or valid_symbol: # note: clean these up in db
+            continue
+           
+        for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
+            xfile = File.latest_by_identifier_language(Identifier('uri', uri), lang)
+            
+            if xfile and lang not in seen:
+                field = Datafield(record_type='bib', tag='FFT', ind1=' ', ind2=' ')
+                field.set('a', 'https://' + xfile.uri)
+                field.set('d', ISO_STR[lang])
+                #field.set('n', encode_fn(symbols if len(symbols) <= 3 else symbols[0:1], lang, 'pdf'))
+                field.set('n', encode_fn_uri(uris if len(uris) <= 3 else uris[0:1], lang, 'pdf'))
                 bib.fields.append(field)
 
                 seen.append(lang)
@@ -525,6 +544,15 @@ def encode_fn(symbols, language, extension):
     xsymbols = [sym.translate(str.maketrans(' /[]*:;', '__^^!#%')) for sym in symbols]
 
     return '{}-{}.{}'.format('--'.join(xsymbols), language.upper(), extension)
+
+def encode_fn_uri(uris, language, extension):
+    from dlx.util import ISO6391
+    
+    ISO6391.codes[language.lower()]
+    fns = [uris.split('/')[-1].split('.pdf')[0]] if isinstance(uris, str) else [uri.split('/')[-1].split('.pdf')[0] for uri in uris]
+    xfns = [fn.translate(str.maketrans(' /[]*:;', '__^^!#%')) for fn in fns]
+
+    return '{}-{}.{}'.format('--'.join(xfns), language.upper(), extension)
 
 def submit_to_dl(record, export_start, args):
     xml = record.to_xml(xref_prefix='(DHLAUTH)')
