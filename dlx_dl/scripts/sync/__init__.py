@@ -310,7 +310,7 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
         else {'updated': criteria}
     
     # sort to ensure latest updates are checked first
-    rset = cls.from_query(query, sort=[('updated', DESC)])
+    rset = cls.from_query(query, sort=[('updated', DESC)], collation=Config.marc_index_default_collation)
 
     return rset
     
@@ -378,10 +378,10 @@ def get_records(args, log=None, queue=None):
             records = cls.from_query({'_id': {'$in': ids}})
     elif args.query:
         query = args.query.replace('\'', '"')
-        records = cls.from_query(json.loads(query))
+        records = cls.from_query(json.loads(query), collation=Config.marc_index_default_collation)
     elif args.querystring:
         query = Query.from_string(args.querystring, record_type=args.type)
-        records = cls.from_query(query)
+        records = cls.from_query(query, collation=Config.marc_index_default_collation)
     else:
         raise Exception('One of the criteria arguments is required')
 
@@ -586,6 +586,31 @@ def compare_and_update(args, *, dlx_record, dl_record):
 
         seen.append(field.to_mrk())
 
+    # for comparing the filenames from dl record 856 with dlx filename
+    def _get_dl_856(fn):
+        fn = export.clean_fn(fn)
+
+        # chars requiring encoding
+        fn = fn.replace('%', '%25')
+        #fn = fn.replace('^', '%5E')
+        #fn = quote(fn)
+
+        if unquote(fn) == fn:
+            fn = quote(fn)
+
+        dl_vals = [x.split('/')[-1] for x in dl_record.get_values('856', 'u')]
+
+        # remove extra chars if any
+        try:
+            dl_vals = [x[:len(fn)-fn[::-1].index('.')-1] + fn[-fn[::-1].index('.')-1:len(fn)] for x in dl_vals]
+        except ValueError:
+            pass
+        except Exception as e:
+            print(f'Error: {dlx_record.id}')
+            raise e
+
+        return dl_vals
+    
     # collector tool files
     for field in dlx_record.get_fields('856'):
         if field.get_value('3') == 'Thumbnail':
@@ -605,32 +630,26 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 return export_whole_record(args, dlx_record, export_type='UPDATE')
 
             fn = url.split('/')[-1]
-            fn = export.clean_fn(fn)
-
-            # chars requiring encoding
-            fn = fn.replace('%', '%25')
-            #fn = fn.replace('^', '%5E')
-            #fn = quote(fn)
-
-            if unquote(fn) == fn:
-                fn = quote(fn)
-
-            dl_vals = [x.split('/')[-1] for x in dl_record.get_values('856', 'u')]
-
-            # remove extra chars if any
-            try:
-                dl_vals = [x[:len(fn)-fn[::-1].index('.')-1] + fn[-fn[::-1].index('.')-1:len(fn)] for x in dl_vals]
-            except ValueError:
-                pass
-            except Exception as e:
-                print(f'Error: {dlx_record.id}')
-                raise e
-
-            if fn not in dl_vals:
+            
+            if fn not in _get_dl_856(fn):
                 print(f'{dlx_record.id}: FILE NOT FOUND ' + url)
 
                 return export_whole_record(args, dlx_record, export_type='UPDATE')
 
+    # records with file URI in 561
+    uris = dlx_record.get_values('561', 'u')
+
+    for uri in uris:
+        if files := list(File.find_by_identifier(Identifier('uri', uri))):
+            latest = sorted(files, key=lambda x: x.timestamp, reverse=True)[0]
+            # filename and size should be same in DL
+            fn = uri.split('/')[-1]
+
+            if fn not in _get_dl_856(fn):
+                print(f'{dlx_record.id}: FILE NOT FOUND ' + uri)
+
+                return export_whole_record(args, dlx_record, export_type='UPDATE')
+    
     # official doc files
     symbols = (dlx_record.get_values('191', 'a') + dlx_record.get_values('191', 'z')) if args.type == 'bib' else []
     #symbols = dlx_record.get_values('191', 'a') if args.type == 'bib' else []
