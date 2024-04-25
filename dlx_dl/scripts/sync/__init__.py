@@ -1,6 +1,7 @@
 """Sync DL from DLX"""
 
 import sys, os, re, json, time, argparse, unicodedata, requests, pytz
+from collections import Counter
 from copy import deepcopy
 from warnings import warn
 from datetime import datetime, timedelta, timezone
@@ -210,7 +211,7 @@ def run(**kwargs):
                     if xref := f.get_value('0'):
                         if xref[:9] != '(DHLAUTH)':
                             for s in f.subfields:
-                                s.value = 'BAD XREF'
+                                pass # s.value = 'BAD XREF'
 
             # record not in DL
             for dlx_record in BATCH:
@@ -235,7 +236,7 @@ def run(**kwargs):
                     continue
                 else:
                     INDEX[dlx_record.id] = True
-
+                
                 # correct fields    
                 result = compare_and_update(args, dlx_record=dlx_record, dl_record=dl_record)
                     
@@ -393,8 +394,11 @@ def get_records(args, log=None, queue=None):
         records = cls.from_query({'$or': [{'_id': {'$in': list(qids)}}, q_args[0]]}, sort=[('updated', ASC)])
 
     return records
+
+def normalize(string):
+    return unicodedata.normalize('NFD', string)
     
-def clean_values(record):
+def clean_dlx_values(record):
     for field in record.datafields:
         for sub in filter(lambda x: not hasattr(x, 'xref'), field.subfields):
             if re.match(r'^-+$', sub.value):
@@ -407,6 +411,9 @@ def clean_values(record):
         if len(field.subfields) == 0:
             # field must contain subfields
             record.fields.remove(field)
+
+        field.ind1 = ' ' if field.ind1 == '_' else field.ind1
+        field.ind2 = ' ' if field.ind2 == '_' else field.ind2
     
     return record
 
@@ -415,7 +422,7 @@ def export_whole_record(args, record, *, export_type):
         raise Exception('invalid "export_type"')
 
     # perform necessary transformations
-    record = clean_values(record)
+    record = clean_dlx_values(record)
 
     # no comp with DL data performed
     if args.type == 'bib':
@@ -437,7 +444,7 @@ def delete_file(args, record, filename):
     submit_to_dl(args, deletion_record, mode='correct', export_start=args.START, export_type='UPDATE')
 
 def compare_and_update(args, *, dlx_record, dl_record):
-    dlx_record = clean_values(dlx_record)
+    dlx_record = clean_dlx_values(dlx_record)
 
     if dl_record.get_field('980') is None:
         print(f'{dlx_record.id} MISSING 980')
@@ -445,146 +452,68 @@ def compare_and_update(args, *, dlx_record, dl_record):
     
     skip_fields = ['035', '909', '949', '980', '998']
     dlx_fields = list(filter(lambda x: x.tag not in skip_fields, dlx_record.datafields))
-    #dlx_values = [subfield.value for field in dlx_fields for subfield in field.subfields]
     dl_fields = list(filter(lambda x: x.tag not in skip_fields, dl_record.datafields))
-    #dl_values = [subfield.value for field in dl_fields for subfield in filter(lambda x: x.code != '0', field.subfields)]
-    
     take_tags = set()
+    delete_fields = []
 
-    # values from dlx not in dl
-    for field in dlx_record.fields:
-        taken = {}
+    # obsolete xrefs
+    for field in dl_fields:
+        if xref := field.get_value('0'):
+            if xref[:9] != '(DHLAUTH)':
+                print(f'{dlx_record.id}: BAD XREF: {field.to_mrk()}')
+                field.subfields = list(filter(lambda x: x.code != '0', field.subfields))
+                take_tags.add(field.tag)
 
-        # skip fields
-        if re.match('^00', field.tag):
-            continue
-        elif field.tag == '856':
+        # remove $0
+        field.subfields = list(filter(lambda x: x.code != 0, field.subfields))
+
+    for field in dlx_fields + dl_fields:
+        # normalize
+        for subfield in filter(lambda x: not hasattr(x, 'xref'), field.subfields):
+            subfield.value = unicodedata.normalize('NFD', subfield.value)
+
+    dlx_fields_serialized = [x.to_mrk() for x in dlx_fields]
+    dl_fields_serialized = [x.to_mrk() for x in dl_fields]
+
+    # dlx -> dl
+    for field in dlx_fields:
+        if field.tag == '856':
             url = field.get_value('u')
             
             if urlparse(url).netloc in export.WHITELIST:
+                # files in these fields have been sent as FFT
                 continue
-        elif field.tag in skip_fields:
-            continue
-        
-        # scan subfield values
-        for subfield in field.subfields:
-            if field.tag == '191' and subfield.code in ('q', 'r'):
-                continue
-            elif subfield.value in ('', None):
-                continue
-            
-            # filter out fields with same tag/indicator combo
-            field.ind1 = ' ' if field.ind1 == '_' else field.ind1
-            field.ind2 = ' ' if field.ind2 == '_' else field.ind2
-            dl_values = dl_record.get_values(field.tag, subfield.code)
 
-            # ignore unicode differences for now
-            def normalize(x): return unicodedata.normalize('NFD', x)
-
-            check_values = normalize(subfield.value) in [normalize(x) for x in dl_values]
-            check_tags = field.tag + ''.join(field.indicators) in [x.tag + ''.join(x.indicators) for x in dl_record.datafields]
-
-            if not check_values or not check_tags:
-                print(f'{dlx_record.id} UPDATE: {field.tag}  {field.indicators} ${subfield.code}: {subfield.value} X {dl_record.get_values(field.tag, subfield.code)}')
-                take_tags.add(field.tag)
-                taken[field.tag] = True
-                break
-            
-        if taken.get(field.tag):
-            continue
-
-        # last resort
-        # remove $0
-        dl_fields_filtered = deepcopy(dl_fields)
-
-        for xfield in dl_fields_filtered:
-            xfield.subfields = list(filter(lambda x: x.code != '0', field.subfields))
-
-        if field.to_mrk() not in [x.to_mrk() for x in dl_fields_filtered]:
+        if field.to_mrk() not in dl_fields_serialized:
+            print(f'{dlx_record.id}: UPDATE: {field.to_mrk()}')
             take_tags.add(field.tag)
-            continue
 
-    # values in dl not in dlx (probably edited)
+    # dl -> dlx
     for field in dl_fields:
-        if field.tag == '856' and 'digitallibrary.un.org' in field.get_value('u'): continue
-
-        for subfield in filter(lambda x: x.code != '0', field.subfields):
-            dlx_values = dlx_record.get_values(field.tag, subfield.code)
-
-            if subfield.value not in dlx_values and field.tag not in take_tags:
-                print(f'{dlx_record.id} UPDATE: {field.tag}  {field.indicators} ${subfield.code}: {subfield.value} XX {dlx_record.get_values(field.tag, subfield.code)}')
-                take_tags.add(field.tag)
-
-    # fields from dl not in dlx
-    delete_fields = []
-
-    for field in dl_record.fields:
-        deleted = {}
-
-        # skip fields
-        if re.match('^00', field.tag):
-            continue
-        elif field.tag in ('035', '909', '949', '980', '998'):
-            continue
-        elif field.tag == '856':
+        if field.tag == '856':
             if 'digitallibrary.un.org' in field.get_value('u'):
-                # files added by FFT
-                # check if the DL files are supposed to be there
-                # $y = $3
-                url = field.get_value('u')
-                filename = url.split('/')[-1]
+                # FFT file
+                continue
 
-                if all(urlparse(x).netloc in export.WHITELIST for x in dlx_record.get_values('856')):
-                    continue
-                elif filename in [x.split('/')[-1] for x in dlx_record.get_values('856', 'u')]:
-                    # corresponding link appears to be in dlx
-                    continue
-                else:
-                    # does not appear to be from a whitelisted link
-                    # check dlx files
-                    symbol = dl_record.get_value('191', 'a') or dl_record.get_value('191', 'z')
-
-                    if symbol and symbol != '***':
-                        # lang is in $y
-                        key = Tokenizer.scrub(field.get_value('y')).replace(' ', '')
-                        
-                        if LANGMAP_REVERSE.get(key):
-                            lang = LANGMAP_REVERSE[key]
-
-                            if File.latest_by_identifier_language(Identifier('symbol', symbol), lang) is None:
-                                print(f'{dlx_record.id}: FILE IN DL NOT IN DLX: {symbol} {lang}')
-                                #delete_file(args, dl_record, filename=filename)
-            
-            continue
-
-        if field.tag + ''.join(field.indicators) not in [x.tag + ''.join(x.indicators) for x in dlx_record.datafields]:
-            print(str(dl_record.id) + ' TO DELETE: ' + field.to_mrk())
-            
-            # delete field by setting all values to empty string
-            for s in field.subfields:
-                s.value = ''
-
-            delete_fields.append(field)
-        elif len(dl_record.get_fields(field.tag)) > len(dlx_record.get_fields(field.tag)):
-            if field.get_subfield('0'):
-                field.subfields.remove(field.get_subfield('0'))
-
-            if field.to_mrk() not in [x.to_mrk() for x in dlx_record.fields]:
-                print(str(dl_record.id) + ' TO DELETE SPECIAL: ' + field.to_mrk())
-
+        if field.to_mrk() not in dlx_fields_serialized:
+            if field.tag in [x.tag for x in dlx_fields]:
+                # this should already be caught in dlx -> dl
                 take_tags.add(field.tag)
+            else:
+                print(f'{dlx_record.id}: TO DELETE: {field.to_mrk()}')
+                delete_fields.append(field)
 
-    # duplicated fields
-    seen = []
-    
-    for field in filter(lambda x: x.get_value('0') not in ('', 'BAD XREF'), dl_record.datafields):
-        if field.to_mrk() in seen:
-            # check if field is also duplicated in dlx
-            if len(dlx_record.get_fields(field.tag)) != len(dl_record.get_fields(field.tag)):
-                print(f'{dlx_record.id}: DUPLICATED FIELD: ' + field.to_mrk())
-                take_tags.add(field.tag)
+    # duplicated dl fields
+    dlx_counts = Counter(dlx_fields_serialized)
+    dl_counts = Counter(dl_fields_serialized)
 
-        seen.append(field.to_mrk())
+    for dup in filter(lambda x: x[1] > 1, dl_counts.items()):
+        # check if field is also duplicated in dlx
+        # `dup` is a Counter object
+        if dlx_counts[dup[0]] != dup[1]:
+            print(f'{dlx_record.id}: DUPLICATED FIELD: {dup}')
+            tag = dup[0][1:4]
+            take_tags.add(tag)
 
     # for comparing the filenames from dl record 856 with dlx filename
     def _get_dl_856(fn):
@@ -677,13 +606,11 @@ def compare_and_update(args, *, dlx_record, dl_record):
                     print(f'{dlx_record.id}: FILE NOT FOUND - {symbol}-{lang}')
                     
                     return export_whole_record(args, dlx_record, export_type='UPDATE')
-
-    # last resort
     
     # request params
-    headers = {'Authorization': 'Token ' + args.api_key, 'Content-Type': 'application/xml; charset=utf-8'}
-    nonce = {'type': args.type, 'id': dlx_record.id, 'key': args.nonce_key}
-    params = {'mode': 'correct', 'callback_url': args.callback_url, 'nonce': json.dumps(nonce)}
+    #headers = {'Authorization': 'Token ' + args.api_key, 'Content-Type': 'application/xml; charset=utf-8'}
+    #nonce = {'type': args.type, 'id': dlx_record.id, 'key': args.nonce_key}
+    #params = {'mode': 'correct', 'callback_url': args.callback_url, 'nonce': json.dumps(nonce)}
     
     # run api submission
     if take_tags or delete_fields:
