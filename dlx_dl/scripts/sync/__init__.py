@@ -205,13 +205,6 @@ def run(**kwargs):
 
                 if match := re.match('^\((DHL|DHLAUTH)\)(.*)', _035):
                     dl_record.id = int(match.group(2))
- 
-                # check xrefs
-                for f in filter(lambda x: isinstance(x, Datafield), dl_record.fields):
-                    if xref := f.get_value('0'):
-                        if xref[:9] != '(DHLAUTH)':
-                            for s in f.subfields:
-                                pass # s.value = 'BAD XREF'
 
             # record not in DL
             for dlx_record in BATCH:
@@ -464,7 +457,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 field.subfields = list(filter(lambda x: x.code != '0', field.subfields))
                 take_tags.add(field.tag)
 
-        # remove $0
+        # remove $0 for comparision purposes
         field.subfields = list(filter(lambda x: x.code != 0, field.subfields))
 
     for field in dlx_fields + dl_fields:
@@ -497,7 +490,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
 
         if field.to_mrk() not in dlx_fields_serialized:
             if field.tag in [x.tag for x in dlx_fields]:
-                # this should already be caught in dlx -> dl
+                print(f'{dlx_record.id}: SUPERCEDED: {field.to_mrk()}')
                 take_tags.add(field.tag)
             else:
                 print(f'{dlx_record.id}: TO DELETE: {field.to_mrk()}')
@@ -606,12 +599,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
                     print(f'{dlx_record.id}: FILE NOT FOUND - {symbol}-{lang}')
                     
                     return export_whole_record(args, dlx_record, export_type='UPDATE')
-    
-    # request params
-    #headers = {'Authorization': 'Token ' + args.api_key, 'Content-Type': 'application/xml; charset=utf-8'}
-    #nonce = {'type': args.type, 'id': dlx_record.id, 'key': args.nonce_key}
-    #params = {'mode': 'correct', 'callback_url': args.callback_url, 'nonce': json.dumps(nonce)}
-    
+
     # run api submission
     if take_tags or delete_fields:
         record = Bib() if args.type == 'bib' else Auth()
