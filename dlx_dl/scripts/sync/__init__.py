@@ -37,7 +37,8 @@ def get_args(**kwargs):
     parser.add_argument('--time_limit', help='runtime limit in seconds', type=int, default=600)
     parser.add_argument('--queue', action='store_true', help='try to export ercords in queue and add to queue if export exceeds limits')
     parser.add_argument('--delete_only', action='store_true')
-    parser.add_argument('--use_api', action='store_true')
+    parser.add_argument('--use_auth_cache', action='store_true')
+    #parser.add_argument('--use_api', action='store_true')
 
     r = parser.add_argument_group('required')
     r.add_argument('--source', required=True, help='an identity to use in the log')
@@ -165,6 +166,10 @@ def run(**kwargs):
     # cycle through records in batches 
     enqueue, to_remove = False, []
 
+    if args.use_auth_cache:
+        print('building auth cache...')
+        Auth.build_cache()
+    
     for i, record in enumerate(records):
         BATCH.append(record)
         SEEN = i + 1
@@ -460,6 +465,11 @@ def compare_and_update(args, *, dlx_record, dl_record):
         # remove $0 for comparision purposes
         field.subfields = list(filter(lambda x: x.code != '0', field.subfields))
 
+    # remove auth controlled subfields with no value (subfield may have been deleted in auth record)
+    for field in dlx_fields:
+        field.subfields = list(filter(lambda x: x.value is not None, field.subfields))
+
+    # serialize to text for comparison
     dlx_fields_serialized = [x.to_mrk() for x in dlx_fields]
     dl_fields_serialized = [x.to_mrk() for x in dl_fields]
 
