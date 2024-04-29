@@ -501,6 +501,14 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 take_tags.add(field.tag)
             else:
                 print(f'{dlx_record.id}: TO DELETE: {field.to_mrk()}')
+
+                # use the field in the export to delete the field in DL by setting values to empty string
+                for subfield in field.subfields:
+                    if hasattr(subfield, 'xref'):
+                        subfield.xref == None
+                    
+                    subfield.value = ""
+
                 delete_fields.append(field)
 
     # duplicated dl fields
@@ -617,9 +625,8 @@ def compare_and_update(args, *, dlx_record, dl_record):
             record.fields += dlx_record.get_fields(tag)
 
         record.fields += delete_fields
-        _998 = dlx_record.get_field('998')
 
-        if _998:
+        if _998 := dlx_record.get_field('998'):
             record.fields.append(_998)
 
         return submit_to_dl(args, record, mode='correct', export_start=args.START, export_type='UPDATE')
