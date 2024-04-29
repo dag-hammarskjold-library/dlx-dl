@@ -300,13 +300,15 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
 
         print(f'found files for {len(fft_symbols)} symbols')
     
-    criteria = SON({'$gte': date_from})
-    
     if date_to:
-        criteria['$lte'] = date_to
+        criteria = {'$and': [{'updated': {'$gte': date_from}}, {'updated': {'$lte': date_to}}]}
+    else:
+        criteria = {'$gte': date_from}
 
-    query = {'$or': [{'updated': criteria}, {'191.subfields.value': {'$in': fft_symbols}}]} if cls == BibSet \
-        else {'updated': criteria}
+    if cls == BibSet and fft_symbols:
+        query = {'$or': [criteria, {'191.subfields.value': {'$in': fft_symbols}}]}
+    else:
+        query = criteria
     
     # sort to ensure latest updates are checked first
     rset = cls.from_query(query, sort=[('updated', DESC)], collation=Config.marc_index_default_collation)
