@@ -458,12 +458,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 take_tags.add(field.tag)
 
         # remove $0 for comparision purposes
-        field.subfields = list(filter(lambda x: x.code != 0, field.subfields))
-
-    for field in dlx_fields + dl_fields:
-        # normalize
-        for subfield in filter(lambda x: not hasattr(x, 'xref'), field.subfields):
-            subfield.value = unicodedata.normalize('NFD', subfield.value)
+        field.subfields = list(filter(lambda x: x.code != '0', field.subfields))
 
     dlx_fields_serialized = [x.to_mrk() for x in dlx_fields]
     dl_fields_serialized = [x.to_mrk() for x in dl_fields]
@@ -477,7 +472,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 # files in these fields have been sent as FFT
                 continue
 
-        if field.to_mrk() not in dl_fields_serialized:
+        if normalize(field.to_mrk()) not in [normalize(x) for x in dl_fields_serialized]:
             print(f'{dlx_record.id}: UPDATE: {field.to_mrk()}')
             take_tags.add(field.tag)
 
@@ -488,7 +483,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 # FFT file
                 continue
 
-        if field.to_mrk() not in dlx_fields_serialized:
+        if normalize(field.to_mrk()) not in [normalize(x) for x in dlx_fields_serialized]:
             if field.tag in [x.tag for x in dlx_fields]:
                 print(f'{dlx_record.id}: SUPERCEDED: {field.to_mrk()}')
                 take_tags.add(field.tag)
