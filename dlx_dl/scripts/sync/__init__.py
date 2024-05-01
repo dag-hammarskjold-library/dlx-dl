@@ -38,7 +38,7 @@ def get_args(**kwargs):
     parser.add_argument('--queue', action='store_true', help='try to export ercords in queue and add to queue if export exceeds limits')
     parser.add_argument('--delete_only', action='store_true')
     parser.add_argument('--use_auth_cache', action='store_true')
-    #parser.add_argument('--use_api', action='store_true')
+    parser.add_argument('--use_api', action='store_true')
 
     r = parser.add_argument_group('required')
     r.add_argument('--source', required=True, help='an identity to use in the log')
@@ -303,7 +303,7 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     if date_to:
         criteria = {'$and': [{'updated': {'$gte': date_from}}, {'updated': {'$lte': date_to}}]}
     else:
-        criteria = {'$gte': date_from}
+        criteria = {'updated': {'$gte': date_from}}
 
     if cls == BibSet and fft_symbols:
         query = {'$or': [criteria, {'191.subfields.value': {'$in': fft_symbols}}]}
