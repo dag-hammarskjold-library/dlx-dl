@@ -1,5 +1,5 @@
 import os, pytest, responses
-from moto import mock_s3
+from moto import mock_aws
 from datetime import datetime
 from dlx_dl.scripts import export, sync
 
@@ -10,7 +10,7 @@ sync.API_RECORD_URL = 'http://127.0.0.1:9090/record'
 sync.API_SEARCH_URL = 'http://127.0.0.1:9090/search'
 
 @pytest.fixture
-@mock_s3 # this has to go after the fixture decorator
+@mock_aws # this has to go after the fixture decorator
 def db():
     from dlx import DB
     from dlx.marc import Bib, Auth
