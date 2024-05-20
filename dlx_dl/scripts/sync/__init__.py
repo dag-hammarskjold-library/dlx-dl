@@ -252,7 +252,7 @@ def run(**kwargs):
         #print(f'{SEEN} / {TOTAL} ', end='', flush=True)
 
         # limits
-        if args.limit != 0 and updated_count == args.limit:
+        if args.limit != 0 and updated_count >= args.limit:
             print('\nReached max exports')
             enqueue = True if args.queue else False
             break
