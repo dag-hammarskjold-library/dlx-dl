@@ -120,8 +120,8 @@ def run(**kwargs):
         pass
     elif last is None:
         raise Exception('No log data found for this source')
-    elif (datetime.now() - (last.get('time') or datetime.min)) > timedelta(hours=3): # skip check if more than 3 hours
-        print("wait time limit exceeded for last import confirmation. proceeding")
+    #elif (datetime.now() - (last.get('time') or datetime.min)) > timedelta(hours=3): # skip check if more than 3 hours
+    #    print("wait time limit exceeded for last import confirmation. proceeding")
     elif last:
         pre = '035__a:(DHL)' if args.type == 'bib' else '035__a:(DHLAUTH)'
         url = f'{API_SEARCH_URL}?search_id=&p={pre}{last["record_id"]}&format=xml'
