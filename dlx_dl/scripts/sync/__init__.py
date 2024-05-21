@@ -496,10 +496,13 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 continue
 
         if normalize(field.to_mrk()) not in [normalize(x) for x in dlx_fields_serialized]:
-            if field.tag in [x.tag for x in dlx_fields]:
+            # compare tag + indicators
+            if field.tag + ''.join(field.indicators) in [x.tag + ''.join(x.indicators) for x in dlx_fields]:
+                # this should already be taken care of in dlx->dl
                 print(f'{dlx_record.id}: SUPERCEDED: {field.to_mrk()}')
                 take_tags.add(field.tag)
             else:
+                # delete fields where the tag + indicators combo does not exist in dl record
                 print(f'{dlx_record.id}: TO DELETE: {field.to_mrk()}')
 
                 # use the field in the export to delete the field in DL by setting values to empty string
