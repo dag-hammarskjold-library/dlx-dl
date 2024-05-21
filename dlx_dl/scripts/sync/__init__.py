@@ -230,10 +230,11 @@ def run(**kwargs):
                 if dlx_record is None:
                     raise Exception('This shouldn\'t be possible. Possible network error.')
                     
-                if INDEX.get(dlx_record.id):
-                    continue
-                else:
-                    INDEX[dlx_record.id] = True
+                # possible source of memory failures for large batches in low memory environments
+                #if INDEX.get(dlx_record.id):
+                #    continue
+                #else:
+                #    INDEX[dlx_record.id] = True
                 
                 # correct fields    
                 result = compare_and_update(args, dlx_record=dlx_record, dl_record=dl_record)
@@ -359,7 +360,7 @@ def get_records(args, log=None, queue=None):
     elif args.modified_to:
         raise Exception('--modified_to not valid without --modified_from')
     elif args.modified_since_log:
-        c = log.find({'source': args.source, 'record_type': args.type, 'export_end': {'$exists': 1}}, sort=[('export_start', DESCENDING)], limit=1)
+        c = log.find({'source': args.source, 'record_type': args.type, 'export_end': {'$exists': 1}}, sort=[('export_start', DESC)], limit=1)
         last = next(c, None)
         if last:
             last_export = last['export_start']
