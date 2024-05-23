@@ -120,8 +120,8 @@ def run(**kwargs):
         pass
     elif last is None:
         raise Exception('No log data found for this source')
-    elif (datetime.now() - (last.get('time') or datetime.min)) > timedelta(hours=3): # skip check if more than 3 hours
-        print("wait time limit exceeded for last import confirmation. proceeding")
+    #elif (datetime.now() - (last.get('time') or datetime.min)) > timedelta(hours=3): # skip check if more than 3 hours
+    #    print("wait time limit exceeded for last import confirmation. proceeding")
     elif last:
         pre = '035__a:(DHL)' if args.type == 'bib' else '035__a:(DHLAUTH)'
         url = f'{API_SEARCH_URL}?search_id=&p={pre}{last["record_id"]}&format=xml'
@@ -252,7 +252,7 @@ def run(**kwargs):
         #print(f'{SEEN} / {TOTAL} ', end='', flush=True)
 
         # limits
-        if args.limit != 0 and updated_count == args.limit:
+        if args.limit != 0 and updated_count >= args.limit:
             print('\nReached max exports')
             enqueue = True if args.queue else False
             break
@@ -496,10 +496,13 @@ def compare_and_update(args, *, dlx_record, dl_record):
                 continue
 
         if normalize(field.to_mrk()) not in [normalize(x) for x in dlx_fields_serialized]:
-            if field.tag in [x.tag for x in dlx_fields]:
+            # compare tag + indicators
+            if field.tag + ''.join(field.indicators) in [x.tag + ''.join(x.indicators) for x in dlx_fields]:
+                # this should already be taken care of in dlx->dl
                 print(f'{dlx_record.id}: SUPERCEDED: {field.to_mrk()}')
                 take_tags.add(field.tag)
             else:
+                # delete fields where the tag + indicators combo does not exist in dl record
                 print(f'{dlx_record.id}: TO DELETE: {field.to_mrk()}')
 
                 # use the field in the export to delete the field in DL by setting values to empty string
