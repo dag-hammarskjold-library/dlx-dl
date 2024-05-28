@@ -177,6 +177,8 @@ def run(**kwargs):
         # process DL batch
         if len(BATCH) in (BATCH_SIZE, TOTAL) or SEEN == TOTAL:
             DL_BATCH = []
+
+            # get DL records using DL search API
             pre = '035__a:(DHL)' if args.type == 'bib' else '035__a:(DHLAUTH)'
             terms = ' OR '.join([f'{pre}{r.id}' for r in BATCH])
             url = f'{API_SEARCH_URL}?search_id=&p={terms}&format=xml' #'&ot=035,998'
@@ -196,7 +198,6 @@ def run(**kwargs):
                 retries += 1
                 response = requests.get(url, headers=HEADERS)
             
-            #records = (BibSet if args.type == 'bib' else AuthSet).from_xml(response.text)
             root = ElementTree.fromstring(response.text)
             #search_id = root.find('search_id').text
             col = root.find(f'{NS}collection')
@@ -218,38 +219,37 @@ def run(**kwargs):
 
                 if dlx_record.id not in [x.id for x in DL_BATCH]:
                     print(f'{dlx_record.id}: NOT FOUND IN DL')
-                    
-                    #exit()
+
                     export_whole_record(args, dlx_record, export_type='NEW')
                     updated_count += 1
+                    
+                    # remove from queue
+                    to_remove.append(dlx_record.id)
             
-            # scan DL records
+            # scan and compare DL records
             for dl_record in DL_BATCH:
                 dlx_record = next(filter(lambda x: x.id == dl_record.id, BATCH), None)
                 
                 if dlx_record is None:
                     raise Exception('This shouldn\'t be possible. Possible network error.')
-                    
-                if INDEX.get(dlx_record.id):
-                    continue
-                else:
-                    INDEX[dlx_record.id] = True
                 
                 # correct fields    
                 result = compare_and_update(args, dlx_record=dlx_record, dl_record=dl_record)
+                # remove from queue
+                to_remove.append(dlx_record.id)
                     
                 if result:
                     updated_count += 1
-            
+                    
             # clear batch
             BATCH = []
-
-        # remove from queue
-        to_remove.append(record)
+            
+            # do the queue removals
+            DB.handle[export.QUEUE_COLLECTION].bulk_write([DeleteOne({'type': args.type, 'record_id': x}) for x in to_remove])
+            to_remove = []
             
         # status
         print('\b' * (len(str(SEEN)) + 4 + len(str(TOTAL))) + f'{SEEN} / {TOTAL} ', end='', flush=True)
-        #print(f'{SEEN} / {TOTAL} ', end='', flush=True)
 
         # limits
         if args.limit != 0 and updated_count >= args.limit:
@@ -265,12 +265,6 @@ def run(**kwargs):
         if SEEN == TOTAL:
             break
 
-    queue = DB.handle[export.QUEUE_COLLECTION]
-    updates = [DeleteOne({'type': args.type, 'record_id': x.id}) for x in to_remove]
-    
-    if updates:
-        queue.bulk_write(updates)
-
     if enqueue:
         print('Submitting remaining records to the queue... ', end='', flush=True)
         updates = []
@@ -281,7 +275,7 @@ def run(**kwargs):
             updates.append(UpdateOne({'source': args.source, 'type': args.type, 'record_id': record.id}, {'$setOnInsert': data}, upsert=True))
 
         if updates:
-            result = queue.bulk_write(updates)
+            result = DB.handle[export.QUEUE_COLLECTION].bulk_write(updates)
             print(f'{result.upserted_count} added. {i + 1 - result.upserted_count} were already in the queue')
 
     print(f'Updated {updated_count} records')
