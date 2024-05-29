@@ -12,7 +12,7 @@ from math import inf
 from io import StringIO
 from xml.etree import ElementTree
 from mongomock import MongoClient as MockClient
-from pymongo import ASCENDING as ASC, DESCENDING as DESC, UpdateOne, DeleteOne
+from pymongo import UpdateOne, DeleteOne
 from bson import SON
 from dlx import DB, Config
 from dlx.marc import Query, Bib, BibSet, Auth, AuthSet, Datafield
@@ -102,29 +102,37 @@ def run(**kwargs):
     args.START = datetime.now(timezone.utc)
     blacklist = DB.handle[export.BLACKLIST_COLLECTION]
     args.blacklisted = [x['symbol'] for x in blacklist.find({})]
-    args.log = DB.handle[LOG_COLLECTION]
+
     HEADERS = {'Authorization': 'Token ' + args.api_key}
     records = get_records(args) # returns an interator  (dlx.Marc.BibSet/AuthSet)
     BATCH, BATCH_SIZE, SEEN, TOTAL, INDEX = [], 100, 0, records.count, {}
     updated_count = 0
     print(f'checking {TOTAL} records')
 
-    # check if last update indexed in DL yet
-    last_10 = list(args.log.find({'source': args.source, 'record_type': args.type}, sort=[('time', DESC)], limit=10)) or []
-    last = last_10[0] if len(last_10) > 0 else {}
-    
-    if last_new := args.log.find_one({'export_start': last.get('export_start') or 'X', 'export_type': 'NEW'}, sort=[('time', DESC)]):
-        last = last_new
-
+    # check if last update cleared in DL yet
     if args.force:
         pass
-    elif last is None:
-        raise Exception('No log data found for this source')
-    #elif (datetime.now() - (last.get('time') or datetime.min)) > timedelta(hours=3): # skip check if more than 3 hours
-    #    print("wait time limit exceeded for last import confirmation. proceeding")
-    elif last:
+    else:
+        to_check = 50
+        last_n = list(DB.handle[export.LOG_COLLECTION].find({'source': args.source, 'record_type': args.type}, sort=[('time', -1)], limit=to_check)) or []
+
+        if not last_n:
+            raise Exception('No log data found for this source. Run with --force to skip this check')
+
+        last_exported = next(filter(lambda x: x.get('response_code') == 200, last_n))
+
+        if not last_exported:
+            raise Exception(f'The last {to_check - len(last_n)} exports have been rejected by the DL subission API. Check data and API status')
+
+        # check if any record in the last expert were new records
+        last_export_start = last_n[0]['export_start']
+        
+        if last_new := DB.handle[export.LOG_COLLECTION].find_one({'export_start': last_export_start, 'export_type': 'NEW'}, sort=[('time', -1)]):
+            last_exported = last_new
+
+        # use DL search API to find the record in DL
         pre = '035__a:(DHL)' if args.type == 'bib' else '035__a:(DHLAUTH)'
-        url = f'{API_SEARCH_URL}?search_id=&p={pre}{last["record_id"]}&format=xml'
+        url = f'{API_SEARCH_URL}?search_id=&p={pre}{last_exported["record_id"]}&format=xml'
 
         if args.type == 'auth':
             url += '&c=Authorities'
@@ -132,35 +140,55 @@ def run(**kwargs):
         if response := requests.get(url, headers=HEADERS):
             root = ElementTree.fromstring(response.text)
             col = root.find(f'{NS}collection')
-            record = col.find(f'{NS}record')
+            record_xml = col.find(f'{NS}record')
         else:
             raise Exception('API request failed')
 
-        if Bib.from_xml(last['xml']).get_value('980', 'a') == 'DELETED':
+        # check if the record has been updated in DL yet
+        flag = None 
+        
+        if Bib.from_xml(last_exported['xml']).get_value('980', 'a') == 'DELETED':
             try:
-                record = Bib.from_xml_raw(record)
+                last_dl_record = Bib.from_xml_raw(record_xml)
                 
-                if record.get_value('980', 'a') != 'DELETED':
-                    print(f'last update not cleared in DL yet (DELETE) ({args.type}# {last["record_id"]} @ {last["time"]})')
-                    exit()
-
+                # the record is hasn't been purged from DL yet
+                if last_dl_record.get_value('980', 'a') != 'DELETED':
+                    flag = 'DELETE'
             except AssertionError:
+                # the record doesnt exist, presumably already purged
                 pass
         else:
             try:
-                record = Bib.from_xml_raw(record)
+                last_dl_record = Bib.from_xml_raw(record_xml)
+                # DL record last updated time is in 005
+                dl_last_updated = str(int(float(last_dl_record.get_value('005'))))
+                dl_last_updated = datetime.strptime(dl_last_updated, '%Y%m%d%H%M%S')
+                # 005 is in local time
+                dl_last_updated += timedelta(hours=4 if pytz.timezone('US/Eastern').localize(dl_last_updated).dst() else 5)
+
+                if last_exported['time'] > dl_last_updated:
+                    flag = 'UPDATE'
             except AssertionError as e:
-                # last record not in DL yet
-                print(f'last update not cleared in DL yet (NEW) ({args.type}# {last["record_id"]} @ {last["time"]})')
-                exit()
+                if last_exported['export_type'] == 'NEW':
+                    # last record not in DL yet
+                    flag = 'NEW'
+                else:
+                    raise Exception(f'Last updated record not found by DL search API: {last_dl_record["record_type"]} {last_exported["record_id"]}')
 
-            dl_last = str(int(float(record.get_value('005'))))
-            dl_last = datetime.strptime(dl_last, '%Y%m%d%H%M%S')
-            # 005 is in local time
-            dl_last += timedelta(hours=4 if pytz.timezone('US/Eastern').localize(dl_last).dst() else 5)
-
-            if last['time'] > dl_last:
-                print(f'last update not cleared in DL yet (UPDATE) ({args.type}# {last["record_id"]} @ {last["time"]})')
+        if flag:
+            # the last export has not cleared in DL yet
+            # check callback log to see if the last export had an import error in DL
+            if callback_data := DB.handle[export.CALLBACK_COLLECTION].find_one({'record_type': last_exported['record_type'], 'record_id': last_exported['record_id']}, sort=[('time', -1)]):
+                if callback_data['results'][0]['success'] == False:
+                    # the last export was exported succesfully, but failed on import to DL. proceed with export
+                    pass
+                else:
+                    # the last export has been imported to DL but is awaiting search indexing
+                    print(f'last new record has been imported to DL but is awaiting search indexing ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
+                    exit()
+            else:
+                # the last export has not been imported by DL yet
+                print(f'last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
                 exit()
 
     # cycle through records in batches 
@@ -305,7 +333,7 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
         query = criteria
     
     # sort to ensure latest updates are checked first
-    rset = cls.from_query(query, sort=[('updated', DESC)], collation=Config.marc_index_default_collation)
+    rset = cls.from_query(query, sort=[('updated', -1)], collation=Config.marc_index_default_collation)
 
     return rset
     
@@ -353,7 +381,7 @@ def get_records(args, log=None, queue=None):
     elif args.modified_to:
         raise Exception('--modified_to not valid without --modified_from')
     elif args.modified_since_log:
-        c = log.find({'source': args.source, 'record_type': args.type, 'export_end': {'$exists': 1}}, sort=[('export_start', DESCENDING)], limit=1)
+        c = log.find({'source': args.source, 'record_type': args.type, 'export_end': {'$exists': 1}}, sort=[('export_start', -1)], limit=1)
         last = next(c, None)
         if last:
             last_export = last['export_start']
@@ -385,7 +413,7 @@ def get_records(args, log=None, queue=None):
         qids = [x['record_id'] for x in queue.find({'type': args.type})]
         print(f'Taking {len(qids)} from queue')
         q_args, q_kwargs = records.query_params
-        records = cls.from_query({'$or': [{'_id': {'$in': list(qids)}}, q_args[0]]}, sort=[('updated', ASC)])
+        records = cls.from_query({'$or': [{'_id': {'$in': list(qids)}}, q_args[0]]}, sort=[('updated', 1)])
 
     return records
 
@@ -666,7 +694,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
         'xml': xml
     }
 
-    args.log.insert_one(logdata)
+    DB.handle[export.LOG_COLLECTION].insert_one(logdata)
     logdata['export_start'] = logdata['export_start'].isoformat()
     logdata['time'] = logdata['time'].isoformat()
     print(logdata)

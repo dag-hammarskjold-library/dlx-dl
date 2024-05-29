@@ -15,6 +15,7 @@ from bson import SON
 API_URL = 'https://digitallibrary.un.org/api/v1/record/'
 LOG_COLLECTION = 'dlx_dl_log'
 QUEUE_COLLECTION = 'dlx_dl_queue'
+CALLBACK_COLLECTION = 'undl_callback_log'
 BLACKLIST_COLLECTION = 'blacklist'
 WHITELIST = ['digitization.s3.amazonaws.com', 'undl-js.s3.amazonaws.com', 'un-maps.s3.amazonaws.com', 'dag.un.org']
 LIMIT = math.inf

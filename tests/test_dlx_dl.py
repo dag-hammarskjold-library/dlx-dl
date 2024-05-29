@@ -218,7 +218,7 @@ def test_sync(db, capsys, mock_get_post):
     bib.commit()
     bib.delete()
 
-    sync.run(connect=db, source='test', type='bib', modified_within=100)
+    sync.run(connect=db, source='test', type='bib', modified_within=100, force=True)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     assert data
         
