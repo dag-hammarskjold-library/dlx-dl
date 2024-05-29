@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 
 setup(
     name = 'dlx_dl',
-    version = '1.2.3',
+    version = '1.2.4',
     url = 'http://github.com/dag-hammarskjold-library/dlx-dl',
     author = 'United Nations Dag Hammarskjöld Library',
     author_email = 'library-ny@un.org',
