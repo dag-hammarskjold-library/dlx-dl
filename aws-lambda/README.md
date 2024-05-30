@@ -5,6 +5,8 @@ This is a Lambda function for running dlx-dl-sync.
 
 ### Deployment 
 
+To do: Update this, since it's not relevant anymore
+
 This describes how to deploy this function to AWS Lambda using the Python library [python-lambda](https://pypi.org/project/python-lambda/). The files in this directory are the standard files necessary for deploying Python code to Lambda.
 
 AWS credentials must be configured in the deployment environment. 
