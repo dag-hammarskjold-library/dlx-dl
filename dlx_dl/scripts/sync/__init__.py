@@ -3,6 +3,7 @@
 import sys, os, re, json, time, argparse, unicodedata, requests, pytz
 from collections import Counter
 from copy import deepcopy
+from itertools import chain
 from warnings import warn
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, quote, unquote
@@ -107,7 +108,7 @@ def run(**kwargs):
     records = get_records(args) # returns an interator  (dlx.Marc.BibSet/AuthSet)
     BATCH, BATCH_SIZE, SEEN, TOTAL, INDEX = [], 100, 0, records.count, {}
     updated_count = 0
-    print(f'checking {TOTAL} records')
+    print(f'checking {TOTAL} updated records')
 
     # check if last update cleared in DL yet
     if args.force:
@@ -246,10 +247,13 @@ def run(**kwargs):
                     continue
 
                 if dlx_record.id not in [x.id for x in DL_BATCH]:
-                    print(f'{dlx_record.id}: NOT FOUND IN DL')
+                    if dlx_record.get_value('980', 'a') == 'DELETED':
+                        pass
+                    else:
+                        print(f'{dlx_record.id}: NOT FOUND IN DL')
 
-                    export_whole_record(args, dlx_record, export_type='NEW')
-                    updated_count += 1
+                        export_whole_record(args, dlx_record, export_type='NEW')
+                        updated_count += 1
                     
                     # remove from queue
                     to_remove.append(dlx_record.id)
@@ -324,28 +328,30 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     
     if date_to:
         criteria = {'$and': [{'updated': {'$gte': date_from}}, {'updated': {'$lte': date_to}}]}
+        history_criteria = {'$and': [{'deleted.time': {'$gte': date_from}}, {'deleted.time': {'$lte': date_to}}]}
     else:
         criteria = {'updated': {'$gte': date_from}}
+        history_criteria = {'deleted.time': {'$gte': date_from}}
 
     if cls == BibSet and fft_symbols:
         query = {'$or': [criteria, {'191.subfields.value': {'$in': fft_symbols}}]}
     else:
         query = criteria
     
-    # sort to ensure latest updates are checked first
-    rset = cls.from_query(query, sort=[('updated', -1)], collation=Config.marc_index_default_collation)
+    # records to delete
+    history = DB.handle['bib_history'] if cls == BibSet else DB.handle['auth_history']
+    deleted = list(history.find(history_criteria))
 
-    return rset
-    
-    hist = DB.handle['bib_history'] if cls == BibSet else DB.handle['auth_history']
-    deleted = list(hist.find({'deleted.time': {'$gte': date_from}}))
+    # sort to ensure latest updates are checked first
+    if delete_only:
+        # todo: fix this in dlx. MarcSet.count not working unless created by .from_query
+        rset = cls.from_query({'_id': {'$exists': False}})
+    else:
+        rset = cls.from_query(query, sort=[('updated', -1)], collation=Config.marc_index_default_collation)
 
     if deleted:
-        if delete_only:
-            rset.records = []
-
+        #records = list(rset.records)
         rcls = Bib if cls == BibSet else Auth
-        records = list(rset.records)
         to_delete = []
         
         for d in deleted:
@@ -354,8 +360,10 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
             r.updated = d['deleted']['time']
             to_delete.append(r)
 
-        rset.records = (r for r in records + to_delete) # program is expecting an iterable
-    
+        rset.records = (r for r in chain((r for r in rset.records), (d for d in  to_delete))) # program is expecting an iterable
+        
+        print(f'Checking {len(to_delete)} deleted records')
+
     return rset
 
 def get_records(args, log=None, queue=None):
