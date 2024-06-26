@@ -106,9 +106,10 @@ def run(**kwargs):
 
     HEADERS = {'Authorization': 'Token ' + args.api_key}
     records = get_records(args) # returns an interator  (dlx.Marc.BibSet/AuthSet)
-    BATCH, BATCH_SIZE, SEEN, TOTAL, INDEX = [], 100, 0, records.count, {}
+    #deleted = get_deleted_records(args)
+    BATCH, BATCH_SIZE, SEEN, TOTAL, INDEX = [], 100, 0, records.total_count, {}
     updated_count = 0
-    print(f'checking {TOTAL} updated records')
+    print(f'checking {records.count} updated records')
 
     # check if last update cleared in DL yet
     if args.force:
@@ -199,7 +200,7 @@ def run(**kwargs):
         print('building auth cache...')
         Auth.build_cache()
     
-    for i, record in enumerate(records):
+    for i, record in enumerate(records.records):
         BATCH.append(record)
         SEEN = i + 1
         
@@ -232,31 +233,38 @@ def run(**kwargs):
             col = root.find(f'{NS}collection')
         
             # process DL XML
-            for r in col or []:
+            for r in [] if col is None else col:
                 dl_record = Bib.from_xml_raw(r)
-                DL_BATCH.append(dl_record)
                 
                 _035 = next(filter(lambda x: re.match('^\(DHL', x), dl_record.get_values('035', 'a')), None)
 
                 if match := re.match('^\((DHL|DHLAUTH)\)(.*)', _035):
                     dl_record.id = int(match.group(2))
 
+                DL_BATCH.append(dl_record)
+
             # record not in DL
             for dlx_record in BATCH:
                 if dlx_record.get_value('245', 'a')[0:16].lower() == 'work in progress':
                     continue
-
-                if dlx_record.id not in [x.id for x in DL_BATCH]:
-                    if dlx_record.get_value('980', 'a') == 'DELETED':
-                        pass
-                    else:
-                        print(f'{dlx_record.id}: NOT FOUND IN DL')
-
-                        export_whole_record(args, dlx_record, export_type='NEW')
-                        updated_count += 1
+                
+                if dlx_record.get_value('980', 'a') == 'DELETED':
+                    if dl_record := next(filter(lambda x: x.id == dlx_record.id, DL_BATCH), None):
+                        if dl_record.get_value('980', 'a') != 'DELETED':
+                            print(f'{dlx_record.id}: RECORD DELETED')
+                            export_whole_record(args, dlx_record, export_type='DELETE')
+                            updated_count += 1
+                        
+                        # remove record from list of DL records to compare
+                        #DL_BATCH = list(filter(lambda x: x.id != dlx_record.id))
+                        DL_BATCH.remove(dl_record)
+                elif dlx_record.id not in [x.id for x in DL_BATCH]:
+                    print(f'{dlx_record.id}: NOT FOUND IN DL')
+                    export_whole_record(args, dlx_record, export_type='NEW')
+                    updated_count += 1
                     
-                    # remove from queue
-                    to_remove.append(dlx_record.id)
+                # remove from queue
+                to_remove.append(dlx_record.id)
             
             # scan and compare DL records
             for dl_record in DL_BATCH:
@@ -318,13 +326,15 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     -------
     BibSet / AuthSet
     """
-    if cls == BibSet:
+    if cls == BibSet and not delete_only:
         fft_symbols = export._new_file_symbols(date_from, date_to)
     
         if len(fft_symbols) > 10000:
             raise Exception('that\'s too many file symbols to look up, sorry :(')
 
         print(f'found files for {len(fft_symbols)} symbols')
+    else:
+        fft_symbols = None
     
     if date_to:
         criteria = {'$and': [{'updated': {'$gte': date_from}}, {'updated': {'$lte': date_to}}]}
@@ -349,10 +359,10 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     else:
         rset = cls.from_query(query, sort=[('updated', -1)], collation=Config.marc_index_default_collation)
 
+    to_delete = []
+
     if deleted:
-        #records = list(rset.records)
         rcls = Bib if cls == BibSet else Auth
-        to_delete = []
         
         for d in deleted:
             r = rcls({'_id': d['_id']})
@@ -362,7 +372,10 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
 
         rset.records = (r for r in chain((r for r in rset.records), (d for d in  to_delete))) # program is expecting an iterable
         
-        print(f'Checking {len(to_delete)} deleted records')
+    print(f'Checking {len(to_delete)} deleted records')
+
+    # todo: enalbe MarcSet.count to handle hybrid cursor/list record sets
+    rset.total_count = rset.count + len(to_delete)
 
     return rset
 
