@@ -38,8 +38,8 @@ def db():
     handle.seek(0)
     File.import_from_handle(
         handle,
-        filename='',
-        identifiers=[Identifier('symbol', 'TEST/1')],
+        filename='test 1',
+        identifiers=[Identifier('symbol', 'TEST/1'), Identifier('uri', 'test uri identifier')],
         languages=['EN'], 
         mimetype='text/plain', 
         source='test'
@@ -210,7 +210,20 @@ def test_delete(db, capsys, mock_post):
     #assert len(data) == 3
     #assert json.loads(data[2])['record_id'] == 3
 
+def test_561(db, tmp_path):
+    from io import BytesIO
+    from xmldiff.main import diff_texts
+    from dlx.marc import Bib
+
+    bib = Bib().set('561', 'u', 'test uri identifier')
+    bib.commit()
+    control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)3</subfield></datafield><datafield tag="561" ind1=" " ind2=" "><subfield code="u">test uri identifier</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="n">.test_1</subfield></datafield></record></collection>'
+    out = tmp_path / 'out.xml'
+    export.run(connect=db, source='test', type='bib', id=bib.id, xml=out)
+    assert diff_texts(out.read_text(), control) == []
+
 def test_sync(db, capsys, mock_get_post):
+    # todo: expand this test
     from http.server import HTTPServer
     from dlx.marc import Bib
     
