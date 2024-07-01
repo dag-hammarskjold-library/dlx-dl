@@ -1,4 +1,4 @@
-import os, pytest, responses
+import sys, os, pytest, responses
 from moto import mock_aws
 from datetime import datetime
 from dlx_dl.scripts import export, sync
@@ -217,7 +217,7 @@ def test_561(db, tmp_path):
 
     bib = Bib().set('561', 'u', 'test uri identifier')
     bib.commit()
-    control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)3</subfield></datafield><datafield tag="561" ind1=" " ind2=" "><subfield code="u">test uri identifier</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="n">.test_1</subfield></datafield></record></collection>'
+    control = '<collection><record><datafield tag="035" ind1=" " ind2=" "><subfield code="a">(DHL)3</subfield></datafield><datafield tag="561" ind1=" " ind2=" "><subfield code="u">test uri identifier</subfield></datafield><datafield tag="980" ind1=" " ind2=" "><subfield code="a">BIB</subfield></datafield><datafield tag="FFT" ind1=" " ind2=" "><subfield code="a">https://mock_bucket.s3.amazonaws.com/1e50210a0202497fb79bc38b6ade6c34</subfield><subfield code="d">English</subfield><subfield code="n">.test_1</subfield></datafield></record></collection>'
     out = tmp_path / 'out.xml'
     export.run(connect=db, source='test', type='bib', id=bib.id, xml=out)
     assert diff_texts(out.read_text(), control) == []
