@@ -79,6 +79,8 @@ def get_args(**kwargs):
     
     # if run as function convert args to sys.argv so they can be parsed by ArgumentParser
     if kwargs:
+        sys.argv = [sys.argv[0]] # clear any existing command line args
+
         for key, val in kwargs.items():
             if val == True:
                 # boolean args
@@ -90,10 +92,10 @@ def get_args(**kwargs):
                 sys.argv.append(f'--{key}={val}')
      
     return parser.parse_args()
-    
+
 def run(**kwargs):
     args = get_args(**kwargs)
-    
+
     if isinstance(kwargs.get('connect'), MockClient):
         # required for testing 
         DB.client = kwargs['connect']
