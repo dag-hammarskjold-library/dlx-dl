@@ -374,6 +374,7 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
             r = rcls({'_id': d['_id']})
             r.set('980', 'a', 'DELETED')
             r.updated = d['deleted']['time']
+            r.user = d['deleted']['user']
             to_delete.append(r)
 
         rset.records = (r for r in chain((r for r in rset.records), (d for d in  to_delete))) # program is expecting an iterable
