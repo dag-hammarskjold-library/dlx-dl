@@ -240,8 +240,11 @@ def run(**kwargs):
                 
                 _035 = next(filter(lambda x: re.match('^\(DHL', x), dl_record.get_values('035', 'a')), None)
 
-                if match := re.match('^\((DHL|DHLAUTH)\)(.*)', _035):
-                    dl_record.id = int(match.group(2))
+                if _035:
+                    if match := re.match('^\((DHL|DHLAUTH)\)(.*)', _035):
+                        dl_record.id = int(match.group(2))
+                else:
+                    raise Exception('035 not found in DL record?')
 
                 DL_BATCH.append(dl_record)
 
@@ -340,10 +343,12 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     
     if date_to:
         criteria = {'$and': [{'updated': {'$gte': date_from}}, {'updated': {'$lte': date_to}}]}
-        history_criteria = {'$and': [{'deleted.time': {'$gte': date_from}}, {'deleted.time': {'$lte': date_to}}]}
+        history_criteria = {'$and': [{'deleted.time': {'$gte': date_from}}, {'deleted.time': {'$lte': date_to}}, {'deleted.user': {'$ne': 'HZN'}}]}
     else:
         criteria = {'updated': {'$gte': date_from}}
-        history_criteria = {'deleted.time': {'$gte': date_from}}
+        history_criteria = {'deleted.time': {'$gte': date_from}, 'deleted.user': {'$ne': 'HZN'}}
+
+    history_criteria
 
     if cls == BibSet and fft_symbols:
         query = {'$or': [criteria, {'191.subfields.value': {'$in': fft_symbols}}]}
@@ -437,6 +442,9 @@ def get_records(args, log=None, queue=None):
         print(f'Taking {len(qids)} from queue')
         q_args, q_kwargs = records.query_params
         records = cls.from_query({'$or': [{'_id': {'$in': list(qids)}}, q_args[0]]}, sort=[('updated', 1)])
+
+    # this value is expected to be set later
+    records.total_count = records.count
 
     return records
 
@@ -637,7 +645,6 @@ def compare_and_update(args, *, dlx_record, dl_record):
     
     # official doc files
     symbols = (dlx_record.get_values('191', 'a') + dlx_record.get_values('191', 'z')) if args.type == 'bib' else []
-    #symbols = dlx_record.get_values('191', 'a') if args.type == 'bib' else []
     
     for symbol in set(symbols):
         if symbol == '' or symbol == ' ' or symbol == '***': # note: clean these up in db
