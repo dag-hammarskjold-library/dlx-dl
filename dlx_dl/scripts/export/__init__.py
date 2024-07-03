@@ -391,6 +391,7 @@ def _561(bib):
             latest = sorted(files, key=lambda x: x.timestamp, reverse=True)[0]
             _fft = Datafield('FFT', record_type='bib')
             _fft.set('a', 'https://' + latest.uri)
+            _fft.set('d', ', '.join([ISO_STR.get(x, '') for x in latest.languages]))
     
             old_fn = latest.filename if latest.filename else uri.split('/')[-1]
             new_fn = clean_fn(old_fn)
