@@ -204,6 +204,9 @@ def run(**kwargs):
         Auth.build_cache()
     
     for i, record in enumerate(records.records):
+        if record.user is None:
+            record.user = 'system'
+
         if record.user[:10] == 'batch_edit':
             # skip syncing batch edited records for now so as not to overwhelm DL queue
             continue
