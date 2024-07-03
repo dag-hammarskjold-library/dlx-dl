@@ -16,7 +16,7 @@ from mongomock import MongoClient as MockClient
 from pymongo import UpdateOne, DeleteOne
 from bson import SON
 from dlx import DB, Config
-from dlx.marc import Query, Bib, BibSet, Auth, AuthSet, Datafield
+from dlx.marc import Query, Bib, BibSet, Auth, AuthSet
 from dlx.file import File, Identifier
 from dlx.util import Tokenizer
 from dlx_dl.scripts import export
@@ -147,8 +147,9 @@ def run(**kwargs):
 
         # check if the record has been updated in DL yet
         flag = None 
-        
-        if Bib.from_xml(last_exported['xml']).get_value('980', 'a') == 'DELETED':
+        last = Bib.from_xml(last_exported['xml'])
+                            
+        if 'DELETED' in (last.get_value('980', 'a'), last.get_value('980', 'c')):
             try:
                 last_dl_record = Bib.from_xml_raw(record_xml)
                 
@@ -234,12 +235,13 @@ def run(**kwargs):
             # process DL XML
             for r in col or []:
                 dl_record = Bib.from_xml_raw(r)
-                DL_BATCH.append(dl_record)
-                
-                _035 = next(filter(lambda x: re.match('^\(DHL', x), dl_record.get_values('035', 'a')), None)
+                _035 = next(filter(lambda x: re.match('^\(DHL', x), dl_record.get_values('035', 'a')), '')
 
                 if match := re.match('^\((DHL|DHLAUTH)\)(.*)', _035):
                     dl_record.id = int(match.group(2))
+                    DL_BATCH.append(dl_record)
+                else:
+                    raise Exception("Not a DLX record?")
 
             # record not in DL
             for dlx_record in BATCH:
@@ -247,7 +249,7 @@ def run(**kwargs):
                     continue
 
                 if dlx_record.id not in [x.id for x in DL_BATCH]:
-                    if dlx_record.get_value('980', 'a') == 'DELETED':
+                    if 'DELETED' in (dlx_record.get_value('980', 'a'), record.get_value('980', 'c')):
                         pass
                     else:
                         print(f'{dlx_record.id}: NOT FOUND IN DL')
@@ -489,13 +491,12 @@ def compare_and_update(args, *, dlx_record, dl_record):
     # obsolete xrefs
     for field in dl_fields:
         if xref := field.get_value('0'):
-            if xref[:9] != '(DHLAUTH)':
+            if xref[:9] == '(DHLAUTH)':
+                field.set('0', xref[9:]) # dlx records do not have the DHLAUTH prefix
+            else:
                 print(f'{dlx_record.id}: BAD XREF: {field.to_mrk()}')
                 field.subfields = list(filter(lambda x: x.code != '0', field.subfields))
                 take_tags.add(field.tag)
-
-        # remove $0 for comparision purposes
-        field.subfields = list(filter(lambda x: x.code != '0', field.subfields))
 
     # remove auth controlled subfields with no value (subfield may have been deleted in auth record)
     for field in dlx_fields:

@@ -175,7 +175,6 @@ def run(**kwargs):
             continue
             
         # export
-        
         xml = record.to_xml(xref_prefix='(DHLAUTH)')
         
         if args.use_api:
