@@ -203,6 +203,10 @@ def run(**kwargs):
         Auth.build_cache()
     
     for i, record in enumerate(records.records):
+        if record.user[:10] == 'batch_edit':
+            # skip syncing batch edited records for now so as not to overwhelm DL queue
+            continue
+
         BATCH.append(record)
         SEEN = i + 1
         
@@ -370,6 +374,7 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
             r = rcls({'_id': d['_id']})
             r.set('980', 'a', 'DELETED')
             r.updated = d['deleted']['time']
+            r.user = d['deleted']['user']
             to_delete.append(r)
 
         rset.records = (r for r in chain((r for r in rset.records), (d for d in  to_delete))) # program is expecting an iterable
