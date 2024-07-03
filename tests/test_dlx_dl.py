@@ -225,6 +225,7 @@ def test_561(db, tmp_path):
 def test_sync(db, capsys, mock_get_post):
     # todo: expand this test
     from http.server import HTTPServer
+    from dlx import DB
     from dlx.marc import Bib
     
     bib = Bib().set('245', 'a', 'Will self destruct')
@@ -234,5 +235,19 @@ def test_sync(db, capsys, mock_get_post):
     sync.run(connect=db, source='test', type='bib', modified_within=100, force=True)
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     assert data
-        
+
+    # skip special user
+    bib = Bib().set('245', 'a', 'Moar testing')
+    bib.commit(user='batch_edit_x')
+    sync.run(connect=db, source='test', type='bib', id=bib.id, force=True)
+    data = list(filter(None, capsys.readouterr().out.split('\n')))
+    assert 'Updated 0 records' in data
+
+    # no user
+    bib = Bib().set('245', 'a', 'Moar testing')
+    bib.commit(user='')
+    sync.run(connect=db, source='test', type='bib', id=bib.id, force=True)
+    data = list(filter(None, capsys.readouterr().out.split('\n')))
+    assert DB.handle['dlx_dl_log'].find_one({'record_id': bib.id})
+    
 ### end
