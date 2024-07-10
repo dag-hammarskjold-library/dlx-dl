@@ -159,7 +159,7 @@ def run(**kwargs):
                 last_dl_record = Bib.from_xml_raw(record_xml)
                 
                 # the record is hasn't been purged from DL yet
-                if last_dl_record.get_value('980', 'a') != 'DELETED':
+                if 'DELETED' not in (last_dl_record.get_value('980', 'a'), last_dl_record.get_value('980', 'c')):
                     flag = 'DELETE'
             except AssertionError:
                 # the record doesnt exist, presumably already purged
@@ -183,9 +183,17 @@ def run(**kwargs):
                     raise Exception(f'Last updated record not found by DL search API: {last_dl_record["record_type"]} {last_exported["record_id"]}')
 
         if flag:
-            # the last export has not cleared in DL yet
             # check callback log to see if the last export had an import error in DL
-            if callback_data := DB.handle[export.CALLBACK_COLLECTION].find_one({'record_type': last_exported['record_type'], 'record_id': last_exported['record_id']}, sort=[('time', -1)]):
+            callback_data = DB.handle[export.CALLBACK_COLLECTION].find_one(
+                {
+                    'record_type': last_exported['record_type'], 
+                    'record_id': last_exported['record_id'],
+                    'time': {'$gt': last_exported['time']}
+                }, 
+                sort=[('time', -1)]
+            )
+
+            if callback_data:
                 if callback_data['results'][0]['success'] == False:
                     # the last export was exported succesfully, but failed on import to DL. proceed with export
                     pass
