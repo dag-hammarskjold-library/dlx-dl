@@ -107,10 +107,12 @@ def run(**kwargs):
     args.blacklisted = [x['symbol'] for x in blacklist.find({})]
 
     HEADERS = {'Authorization': 'Token ' + args.api_key}
-    records = get_records(args) # returns an interator  (dlx.Marc.BibSet/AuthSet)
+    records, TOTAL = get_records(args) # returns an interator  (dlx.Marc.BibSet/AuthSet)
     #deleted = get_deleted_records(args)
-    BATCH, BATCH_SIZE, SEEN, TOTAL, INDEX = [], 100, 0, records.total_count, {}
-    updated_count = 0
+    BATCH = []
+    BATCH_SIZE = 100
+    SEEN = 0
+    UPDATED = 0
     print(f'checking {records.count} updated records')
 
     # check if last update cleared in DL yet
@@ -261,14 +263,14 @@ def run(**kwargs):
                         if dl_record.get_value('980', 'a') != 'DELETED':
                             print(f'{dlx_record.id}: RECORD DELETED')
                             export_whole_record(args, dlx_record, export_type='DELETE')
-                            updated_count += 1
+                            UPDATED += 1
                         
                         # remove record from list of DL records to compare
                         DL_BATCH.remove(dl_record)
                 elif dlx_record.id not in [x.id for x in DL_BATCH]:
                     print(f'{dlx_record.id}: NOT FOUND IN DL')
                     export_whole_record(args, dlx_record, export_type='NEW')
-                    updated_count += 1
+                    UPDATED += 1
                     
                 # remove from queue
                 to_remove.append(dlx_record.id)
@@ -286,7 +288,7 @@ def run(**kwargs):
                 to_remove.append(dlx_record.id)
                     
                 if result:
-                    updated_count += 1
+                    UPDATED += 1
                     
             # clear batch
             BATCH = []
@@ -299,7 +301,7 @@ def run(**kwargs):
         print('\b' * (len(str(SEEN)) + 4 + len(str(TOTAL))) + f'{SEEN} / {TOTAL} ', end='', flush=True)
 
         # limits
-        if args.limit != 0 and updated_count >= args.limit:
+        if args.limit != 0 and UPDATED >= args.limit:
             print('\nReached max exports')
             enqueue = True if args.queue else False
             break
@@ -325,7 +327,7 @@ def run(**kwargs):
             result = DB.handle[export.QUEUE_COLLECTION].bulk_write(updates)
             print(f'{result.upserted_count} added. {i + 1 - result.upserted_count} were already in the queue')
 
-    print(f'Updated {updated_count} records')
+    print(f'Updated {UPDATED} records')
 
 def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     """
@@ -375,6 +377,7 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
         
         for d in deleted:
             r = rcls({'_id': d['_id']})
+            r.set('035', 'a', f'{"(DHL)" if cls == BibSet else "(DHLAUTH)"}{r.id}')
             r.set('980', 'a', 'DELETED')
             r.updated = d['deleted']['time']
             r.user = d['deleted']['user']
@@ -385,9 +388,8 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     print(f'Checking {len(to_delete)} deleted records')
 
     # todo: enalbe MarcSet.count to handle hybrid cursor/list record sets
-    rset.total_count = rset.count + len(to_delete)
-
-    return rset
+  
+    return [rset, rset.count + len(deleted)]
 
 def get_records(args, log=None, queue=None):
     cls = BibSet if args.type == 'bib' else AuthSet
@@ -445,9 +447,6 @@ def get_records(args, log=None, queue=None):
         print(f'Taking {len(qids)} from queue')
         q_args, q_kwargs = records.query_params
         records = cls.from_query({'$or': [{'_id': {'$in': list(qids)}}, q_args[0]]}, sort=[('updated', 1)])
-
-    # this value is expected to be set later
-    records.total_count = records.count
 
     return records
 
