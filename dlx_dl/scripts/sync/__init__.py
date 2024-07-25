@@ -198,13 +198,15 @@ def run(**kwargs):
                 if callback_data['results'][0]['success'] == False:
                     # the last export was exported succesfully, but failed on import to DL. proceed with export
                     pass
-                else:
+                elif flag == 'NEW':
                     # the last export has been imported to DL but is awaiting search indexing
-                    print(f'last new record has been imported to DL but is awaiting search indexing ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
+                    print(f'Last new record has been imported to DL but is awaiting search indexing ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
                     exit()
+                else:
+                    raise Exception('This shouldn\'t be possible')
             else:
                 # the last export has not been imported by DL yet
-                print(f'last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
+                print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
                 exit()
 
     # cycle through records in batches 
