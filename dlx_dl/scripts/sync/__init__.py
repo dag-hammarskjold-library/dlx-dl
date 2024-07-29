@@ -176,10 +176,12 @@ def run(**kwargs):
 
                 if last_exported['time'] > dl_last_updated:
                     flag = 'UPDATE'
+                    print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
             except AssertionError as e:
                 if last_exported['export_type'] == 'NEW':
                     # last record not in DL yet
                     flag = 'NEW'
+                    print(f'Last new record has been imported to DL but is awaiting search indexing ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
                 else:
                     raise Exception(f'Last updated record not found by DL search API: {last_dl_record["record_type"]} {last_exported["record_id"]}')
 
@@ -199,14 +201,13 @@ def run(**kwargs):
                     # the last export was exported succesfully, but failed on import to DL. proceed with export
                     pass
                 elif flag == 'NEW':
-                    # the last export has been imported to DL but is awaiting search indexing
-                    print(f'Last new record has been imported to DL but is awaiting search indexing ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
+                    # the record has been imported to DL but isn't searchable yet
                     exit()
                 else:
-                    raise Exception('This shouldn\'t be possible')
+                    # the record was exported and imported to DL succesfully, but DL did not record the update in
+                    # the 005 field. this can happen if there were no changes to be made to the DL record.
+                    warn(f'Possible redundant export not recorded in DL: {flag} {args.type}# {last_exported["record_id"]}')
             else:
-                # the last export has not been imported by DL yet
-                print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
                 exit()
 
     # cycle through records in batches 
