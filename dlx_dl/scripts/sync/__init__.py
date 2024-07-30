@@ -512,7 +512,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
 
     if dl_record.get_field('980') is None:
         print(f'{dlx_record.id} MISSING 980')
-        export_whole_record(args, dlx_record, export_type='UPDATE')
+        return export_whole_record(args, dlx_record, export_type='UPDATE')
     
     skip_fields = ['035', '909', '949', '980', '998']
     dlx_fields = list(filter(lambda x: x.tag not in skip_fields, dlx_record.datafields))
@@ -539,7 +539,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
     dl_fields_serialized = [x.to_mrk() for x in dl_fields]
 
     # dlx -> dl
-    for field in dlx_fields:
+    for field in dlx_fields:      
         if field.tag == '856':
             url = field.get_value('u')
             
@@ -712,7 +712,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
         'Content-Type': 'application/xml; charset=utf-8',
     }
 
-    nonce = {'type': args.type, 'id': record.id, 'key': args.nonce_key}
+    nonce = {'type': args.type, 'id': record.id, 'export_id': str(export_start),'key': args.nonce_key}
     
     params = {
         'mode': mode,
