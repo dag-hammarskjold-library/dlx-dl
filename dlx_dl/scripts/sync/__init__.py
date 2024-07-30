@@ -712,7 +712,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
         'Content-Type': 'application/xml; charset=utf-8',
     }
 
-    nonce = {'type': args.type, 'id': record.id, 'export_id': str(export_start),'key': args.nonce_key}
+    nonce = {'type': args.type, 'id': record.id, 'export_start': str(export_start),'key': args.nonce_key}
     
     params = {
         'mode': mode,
