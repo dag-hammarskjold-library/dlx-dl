@@ -605,10 +605,12 @@ def compare_and_update(args, *, dlx_record, dl_record):
             fn = quote(fn)
 
         dl_vals = [x.split('/')[-1] for x in dl_record.get_values('856', 'u')]
+        dl_vals = [unquote(x) for x in dl_vals] # filenames in UNDL get double percent encoded?
 
         # remove extra chars if any
         try:
-            dl_vals = [x[:len(fn)-fn[::-1].index('.')-1] + fn[-fn[::-1].index('.')-1:len(fn)] for x in dl_vals]
+            # not sure what this is supposed to be doing. to review
+            pass # dl_vals = [x[:len(fn)-fn[::-1].index('.')-1] + fn[-fn[::-1].index('.')-1:len(fn)] for x in dl_vals]
         except ValueError:
             pass
         except Exception as e:
@@ -637,7 +639,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
 
             fn = url.split('/')[-1]
             
-            if fn not in _get_dl_856(fn):
+            if export.clean_fn(fn) not in _get_dl_856(fn):
                 print(f'{dlx_record.id}: FILE NOT FOUND ' + url)
 
                 return export_whole_record(args, dlx_record, export_type='UPDATE')
@@ -651,7 +653,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
             # filename and size should be same in DL
             fn = uri.split('/')[-1]
 
-            if fn not in _get_dl_856(fn):
+            if export.clean_fn(fn) not in _get_dl_856(fn):
                 print(f'{dlx_record.id}: FILE NOT FOUND ' + uri)
 
                 return export_whole_record(args, dlx_record, export_type='UPDATE')
