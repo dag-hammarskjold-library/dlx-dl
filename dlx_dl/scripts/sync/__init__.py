@@ -455,7 +455,7 @@ def get_records(args, log=None, queue=None):
 
     if args.queue:
         queue = DB.handle[export.QUEUE_COLLECTION]
-        qids = [x['record_id'] for x in queue.find({'type': args.type})]
+        qids = [x['record_id'] for x in queue.find({'source': args.source, 'type': args.type})]
         print(f'Taking {len(qids)} from queue')
         q_args, q_kwargs = marcset.query_params
         marcset = cls.from_query({'$or': [{'_id': {'$in': list(qids)}}, q_args[0]]}, sort=[('updated', 1)])
