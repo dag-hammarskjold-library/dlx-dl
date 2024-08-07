@@ -34,6 +34,7 @@ def run():
     total = 0
     seen = 0
     status = f'page: {page}'
+    to_delete_count = 0
 
     while 1:
         if args.type == 'auth':
@@ -43,6 +44,12 @@ def run():
        
         if response.status_code == 429:
             print('\nRate limit reached. Waiting five mintues to retry...')
+            time.sleep(60 * 5)
+            print('OK, resuming.')
+            continue
+        elif response.status_code == 502:
+            # bad gateway
+            print('\nBad gateway. Waiting five mintues to retry...')
             time.sleep(60 * 5)
             print('OK, resuming.')
             continue
@@ -70,12 +77,15 @@ def run():
             _035 = next(filter(lambda x: re.match('^\(DHL', x), dl_record.get_values('035', 'a')), '')
         
             if match := re.match('^\((DHL|DHLAUTH)\)(.*)', _035):
-                dl_record.id = int(match.group(2))
-                dl_ids.append(dl_record.id)
+                if 'DELETED' not in dl_record.get_values('980', 'a', 'c'):
+                    dl_record.id = int(match.group(2))
+                    dl_ids.append(dl_record.id)
 
         dlx_ids = [x['_id'] for x in (DB.bibs if args.type == 'bib' else DB.auths).find({'_id': {'$in': dl_ids}}, projection={'_id': 1})]
         
         if not_in_dlx := [x for x in dl_ids if x not in dlx_ids]:
+            to_delete_count += len(not_in_dlx)
+            
             OUT.write('\n'.join([str(x) for x in not_in_dlx]) + '\n')
             OUT.flush()
 
@@ -85,10 +95,12 @@ def run():
         status = f'page: {page}'
 
     if total == 0:
-        print('No records found')
+        print('No records meeting search criteria found')
     elif seen != total:
         print(response.text)
-        raise Exception(f'Only {seen}/{total} of the DL records were seen. The API may not have returned all the results')
+        print(f'Only {seen}/{total} of the DL records were seen. The API may not have returned all the results. Found {to_delete_count} records to delete. Results in {output_file}')
+    else:
+        print(f'Found {to_delete_count} records to delete. Results in {output_file}')
 
 ### 
 
