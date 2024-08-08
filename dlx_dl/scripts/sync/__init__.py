@@ -512,12 +512,9 @@ def delete_file(args, record, filename):
 
 def compare_and_update(args, *, dlx_record, dl_record):
     dlx_record = clean_dlx_values(dlx_record)
-
-    if dl_record.get_field('980') is None:
-        print(f'{dlx_record.id} MISSING 980')
-        return export_whole_record(args, dlx_record, export_type='UPDATE')
+    dlx_record = export._980(dlx_record) # add the 980 to dlx record for comparison
     
-    skip_fields = ['035', '909', '949', '980', '998']
+    skip_fields = ['035', '909', '949', '998']
     dlx_fields = list(filter(lambda x: x.tag not in skip_fields, dlx_record.datafields))
     dl_fields = list(filter(lambda x: x.tag not in skip_fields, dl_record.datafields))
     take_tags = set()
