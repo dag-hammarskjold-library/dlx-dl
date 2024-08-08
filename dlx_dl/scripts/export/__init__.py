@@ -334,7 +334,7 @@ def process_bib(bib, *, blacklisted, files_only):
     if bib.get_value('980', 'a') == 'DELETED':
         return bib
     
-    bib.set('980', 'a', 'BIB')
+    bib = _980(bib)
     
     return bib
     
@@ -348,16 +348,7 @@ def process_auth(auth):
     if auth.get_value('980', 'a') == 'DELETED':
         return auth
         
-    auth.set('980', 'a', 'AUTHORITY')
-    atag = auth.heading_field.tag
-    
-    if atag in AUTH_TYPE.keys():
-        atype = AUTH_TYPE[atag]
-        auth.set('980', 'a', atype, address=['+'])
-            
-        if atag == '110':
-            if auth.heading_field.get_value('9') == 'ms':
-                auth.set('980', 'a', 'MEMBER', address=['+'])
+    auth = _980(auth)
                 
     return auth
     
@@ -454,6 +445,23 @@ def _856(bib):
             place += 1
             
     return bib
+
+def _980(record):
+    if isinstance(record, Bib):
+        return record.set('980', 'a', 'BIB')
+
+    record.set('980', 'a', 'AUTHORITY')
+    atag = record.heading_field.tag
+    
+    if atag in AUTH_TYPE.keys():
+        atype = AUTH_TYPE[atag]
+        record.set('980', 'a', atype, address=['+'])
+            
+        if atag == '110':
+            if record.heading_field.get_value('9') == 'ms':
+                record.set('980', 'a', 'MEMBER', address=['+'])
+
+    return record
 
 def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     fft_symbols = _new_file_symbols(date_from, date_to)
