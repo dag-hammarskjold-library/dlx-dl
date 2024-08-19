@@ -114,7 +114,7 @@ def run(**kwargs):
     BATCH_SIZE = 100
     SEEN = 0
     UPDATED_COUNT = 0
-    print(f'checking {marcset.count} updated records')
+    print(f'Checking {marcset.count} updated records')
 
     # check if last update cleared in DL yet
     if args.force:
@@ -131,14 +131,9 @@ def run(**kwargs):
         if not last_exported:
             raise Exception(f'The last {to_check - len(last_n)} exports have been rejected by the DL subission API. Check data and API status')
 
-        # check if the last export is still running
+        # check if any record in the last export were new records
         last_export_start = last_n[0]['export_start']
-
-        if DB.handle[export.LOG_COLLECTION].find({'export_start': last_export_start, 'export_end': {'exists': False}}):
-            print('Last export still running')
-            exit()
         
-        # check if any record in the last expert were new records
         if last_new := DB.handle[export.LOG_COLLECTION].find_one({'export_start': last_export_start, 'export_type': 'NEW', 'response_code': 200}, sort=[('time', -1)]):
             last_exported = last_new
 
@@ -209,7 +204,7 @@ def run(**kwargs):
                     pass
                 elif flag == 'NEW':
                     # the record has been imported to DL but isn't searchable yet
-                    print(f'Callback received indicating sucessful import of {args.type}# {last_exported["record_id"]} @ {callback_data['time']}. Awaiting search indexing')
+                    print(f'Awaiting search indexing of last new record: {args.type}# {last_exported['record_id']}. Callback received indicating sucessful import @ {callback_data['time']}.')
                     exit()
                 else:
                     # the record was exported and imported to DL succesfully, but DL did not record the update in
