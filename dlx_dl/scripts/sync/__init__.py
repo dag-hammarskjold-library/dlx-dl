@@ -1,6 +1,6 @@
 """Sync DL from DLX"""
 
-import sys, os, re, json, time, argparse, unicodedata, requests, pytz
+import sys, os, re, json, time, argparse, unicodedata, requests, pytz, uuid
 from collections import Counter
 from copy import deepcopy
 from itertools import chain
@@ -14,7 +14,7 @@ from io import StringIO
 from xml.etree import ElementTree
 from mongomock import MongoClient as MockClient
 from pymongo import UpdateOne, DeleteOne
-from bson import SON
+from bson import SON, Regex
 from dlx import DB, Config
 from dlx.marc import Query, Bib, BibSet, Auth, AuthSet
 from dlx.file import File, Identifier
@@ -114,7 +114,7 @@ def run(**kwargs):
     BATCH_SIZE = 100
     SEEN = 0
     UPDATED_COUNT = 0
-    print(f'checking {marcset.count} updated records')
+    print(f'Checking {marcset.count} updated records')
 
     # check if last update cleared in DL yet
     if args.force:
@@ -131,10 +131,10 @@ def run(**kwargs):
         if not last_exported:
             raise Exception(f'The last {to_check - len(last_n)} exports have been rejected by the DL subission API. Check data and API status')
 
-        # check if any record in the last expert were new records
+        # check if any record in the last export were new records
         last_export_start = last_n[0]['export_start']
         
-        if last_new := DB.handle[export.LOG_COLLECTION].find_one({'export_start': last_export_start, 'export_type': 'NEW'}, sort=[('time', -1)]):
+        if last_new := DB.handle[export.LOG_COLLECTION].find_one({'export_start': last_export_start, 'export_type': 'NEW', 'response_code': 200}, sort=[('time', -1)]):
             last_exported = last_new
 
         # use DL search API to find the record in DL
@@ -168,6 +168,15 @@ def run(**kwargs):
         else:
             try:
                 last_dl_record = Bib.from_xml_raw(record_xml)
+            except AssertionError as e:
+                if last_exported['export_type'] == 'NEW':
+                    # last record not in DL yet
+                    flag = 'NEW'
+                    last_dl_record = None
+                else:
+                    raise Exception(f'Last updated record not found by DL search API: {last_exported["record_type"]} {last_exported["record_id"]}')
+            
+            if last_dl_record:
                 # DL record last updated time is in 005
                 dl_last_updated = str(int(float(last_dl_record.get_value('005'))))
                 dl_last_updated = datetime.strptime(dl_last_updated, '%Y%m%d%H%M%S')
@@ -176,38 +185,33 @@ def run(**kwargs):
 
                 if last_exported['time'] > dl_last_updated:
                     flag = 'UPDATE'
-                    print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
-            except AssertionError as e:
-                if last_exported['export_type'] == 'NEW':
-                    # last record not in DL yet
-                    flag = 'NEW'
-                    print(f'Last new record has been imported to DL but is awaiting search indexing ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
-                else:
-                    raise Exception(f'Last updated record not found by DL search API: {last_dl_record["record_type"]} {last_exported["record_id"]}')
-
         if flag:
             # check callback log to see if the last export had an import error in DL
-            callback_data = DB.handle[export.CALLBACK_COLLECTION].find_one(
-                {
-                    'record_type': last_exported['record_type'], 
-                    'record_id': last_exported['record_id'],
-                    'time': {'$gt': last_exported['time']}
-                }, 
-                sort=[('time', -1)]
-            )
+            q = {'record_type': last_exported['record_type'], 'record_id': last_exported['record_id']}
+
+            if export_id := last_exported.get('export_id'):
+                q['nonce.export_id'] = export_id
+            else:
+                # todo: get rid of this when possible to transition to using only export_id
+                q['nonce.export_start'] = Regex('^' + str(last_export_start)[:19]) # time strings might not match at microsecond level for some reason
+
+            callback_data = DB.handle[export.CALLBACK_COLLECTION].find_one(q, sort=[('time', -1)])
 
             if callback_data:
                 if callback_data['results'][0]['success'] == False:
                     # the last export was exported succesfully, but failed on import to DL. proceed with export
+                    print(f'There was an error in DL processing the last {flag} record. Proceeding.')
                     pass
                 elif flag == 'NEW':
                     # the record has been imported to DL but isn't searchable yet
+                    print(f'Awaiting search indexing of last new record: {args.type}# {last_exported["record_id"]}. Callback received indicating sucessful import @ {callback_data["time"]}.')
                     exit()
                 else:
                     # the record was exported and imported to DL succesfully, but DL did not record the update in
                     # the 005 field. this can happen if there were no changes to be made to the DL record.
                     warn(f'Possible redundant export not recorded in DL: {flag} {args.type}# {last_exported["record_id"]}')
             else:
+                print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
                 exit()
 
     # cycle through records in batches 
@@ -259,9 +263,9 @@ def run(**kwargs):
             # process DL XML
             for r in [] if col is None else col:
                 dl_record = Bib.from_xml_raw(r)
-                _035 = next(filter(lambda x: re.match('^\(DHL', x), dl_record.get_values('035', 'a')), '')
+                _035 = next(filter(lambda x: re.match(r'^\(DHL', x), dl_record.get_values('035', 'a')), '')
 
-                if match := re.match('^\((DHL|DHLAUTH)\)(.*)', _035):
+                if match := re.match(r'^\((DHL|DHLAUTH)\)(.*)', _035):
                     dl_record.id = int(match.group(2))
                     DL_BATCH.append(dl_record)
 
@@ -664,7 +668,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
            
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             if f := File.latest_by_identifier_language(Identifier('symbol', symbol), lang):
-                field = next(filter(lambda x: re.search(f'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
+                field = next(filter(lambda x: re.search(fr'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
                 
                 if field:
                     try:
@@ -707,6 +711,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
     if export_type not in ('NEW', 'UPDATE', 'DELETE'):
         raise Exception('invalid "export_type"')
 
+    export_id = str(uuid.uuid4()) # random uuid
     xml = record.to_xml(xref_prefix='(DHLAUTH)')
     
     headers = {
@@ -714,7 +719,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
         'Content-Type': 'application/xml; charset=utf-8',
     }
 
-    nonce = {'type': args.type, 'id': record.id, 'export_start': str(export_start),'key': args.nonce_key}
+    nonce = {'type': args.type, 'id': record.id, 'export_start': str(export_start), 'export_id': export_id,'key': args.nonce_key}
     
     params = {
         'mode': mode,
@@ -726,6 +731,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
     
     logdata = {
         'export_start': export_start,
+        'export_id': export_id,
         'export_type': export_type,
         'time': datetime.now(timezone.utc),
         'source': args.source,
