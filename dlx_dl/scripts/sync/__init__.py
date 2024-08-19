@@ -204,7 +204,7 @@ def run(**kwargs):
                     pass
                 elif flag == 'NEW':
                     # the record has been imported to DL but isn't searchable yet
-                    print(f'Awaiting search indexing of last new record: {args.type}# {last_exported['record_id']}. Callback received indicating sucessful import @ {callback_data['time']}.')
+                    print(f'Awaiting search indexing of last new record: {args.type}# {last_exported["record_id"]}. Callback received indicating sucessful import @ {callback_data["time"]}.')
                     exit()
                 else:
                     # the record was exported and imported to DL succesfully, but DL did not record the update in
