@@ -134,7 +134,7 @@ def run(**kwargs):
         # check if any record in the last expert were new records
         last_export_start = last_n[0]['export_start']
         
-        if last_new := DB.handle[export.LOG_COLLECTION].find_one({'export_start': last_export_start, 'export_type': 'NEW'}, sort=[('time', -1)]):
+        if last_new := DB.handle[export.LOG_COLLECTION].find_one({'export_start': last_export_start, 'export_type': 'NEW', 'response_code': 200}, sort=[('time', -1)]):
             last_exported = last_new
 
         # use DL search API to find the record in DL
@@ -168,6 +168,16 @@ def run(**kwargs):
         else:
             try:
                 last_dl_record = Bib.from_xml_raw(record_xml)
+            except AssertionError as e:
+                if last_exported['export_type'] == 'NEW':
+                    # last record not in DL yet
+                    flag = 'NEW'
+                    print(f'Last new record has been imported to DL but is awaiting search indexing ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
+                    last_dl_record = None
+                else:
+                    raise Exception(f'Last updated record not found by DL search API: {last_exported["record_type"]} {last_exported["record_id"]}')
+            
+            if last_dl_record:
                 # DL record last updated time is in 005
                 dl_last_updated = str(int(float(last_dl_record.get_value('005'))))
                 dl_last_updated = datetime.strptime(dl_last_updated, '%Y%m%d%H%M%S')
@@ -177,13 +187,6 @@ def run(**kwargs):
                 if last_exported['time'] > dl_last_updated:
                     flag = 'UPDATE'
                     print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
-            except AssertionError as e:
-                if last_exported['export_type'] == 'NEW':
-                    # last record not in DL yet
-                    flag = 'NEW'
-                    print(f'Last new record has been imported to DL but is awaiting search indexing ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
-                else:
-                    raise Exception(f'Last updated record not found by DL search API: {last_dl_record["record_type"]} {last_exported["record_id"]}')
 
         if flag:
             # check callback log to see if the last export had an import error in DL
