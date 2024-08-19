@@ -131,9 +131,14 @@ def run(**kwargs):
         if not last_exported:
             raise Exception(f'The last {to_check - len(last_n)} exports have been rejected by the DL subission API. Check data and API status')
 
-        # check if any record in the last expert were new records
+        # check if the last export is still running
         last_export_start = last_n[0]['export_start']
+
+        if DB.handle[export.LOG_COLLECTION].find({'export_start': last_export_start, 'export_end': {'exists': False}}):
+            print('Last export still running')
+            exit()
         
+        # check if any record in the last expert were new records
         if last_new := DB.handle[export.LOG_COLLECTION].find_one({'export_start': last_export_start, 'export_type': 'NEW', 'response_code': 200}, sort=[('time', -1)]):
             last_exported = last_new
 
@@ -263,9 +268,9 @@ def run(**kwargs):
             # process DL XML
             for r in [] if col is None else col:
                 dl_record = Bib.from_xml_raw(r)
-                _035 = next(filter(lambda x: re.match('^\(DHL', x), dl_record.get_values('035', 'a')), '')
+                _035 = next(filter(lambda x: re.match(r'^\(DHL', x), dl_record.get_values('035', 'a')), '')
 
-                if match := re.match('^\((DHL|DHLAUTH)\)(.*)', _035):
+                if match := re.match(r'^\((DHL|DHLAUTH)\)(.*)', _035):
                     dl_record.id = int(match.group(2))
                     DL_BATCH.append(dl_record)
 
@@ -671,7 +676,7 @@ def compare_and_update(args, *, dlx_record, dl_record):
            
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             if f := File.latest_by_identifier_language(Identifier('symbol', symbol), lang):
-                field = next(filter(lambda x: re.search(f'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
+                field = next(filter(lambda x: re.search(fr'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
                 
                 if field:
                     try:
