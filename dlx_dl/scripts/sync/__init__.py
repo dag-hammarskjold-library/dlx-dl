@@ -1,6 +1,6 @@
 """Sync DL from DLX"""
 
-import sys, os, re, json, time, argparse, unicodedata, requests, pytz
+import sys, os, re, json, time, argparse, unicodedata, requests, pytz, uuid
 from collections import Counter
 from copy import deepcopy
 from itertools import chain
@@ -14,7 +14,7 @@ from io import StringIO
 from xml.etree import ElementTree
 from mongomock import MongoClient as MockClient
 from pymongo import UpdateOne, DeleteOne
-from bson import SON
+from bson import SON, Regex
 from dlx import DB, Config
 from dlx.marc import Query, Bib, BibSet, Auth, AuthSet
 from dlx.file import File, Identifier
@@ -172,7 +172,6 @@ def run(**kwargs):
                 if last_exported['export_type'] == 'NEW':
                     # last record not in DL yet
                     flag = 'NEW'
-                    print(f'Last new record has been imported to DL but is awaiting search indexing ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
                     last_dl_record = None
                 else:
                     raise Exception(f'Last updated record not found by DL search API: {last_exported["record_type"]} {last_exported["record_id"]}')
@@ -186,31 +185,33 @@ def run(**kwargs):
 
                 if last_exported['time'] > dl_last_updated:
                     flag = 'UPDATE'
-                    print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
-
         if flag:
             # check callback log to see if the last export had an import error in DL
-            callback_data = DB.handle[export.CALLBACK_COLLECTION].find_one(
-                {
-                    'record_type': last_exported['record_type'], 
-                    'record_id': last_exported['record_id'],
-                    'time': {'$gt': last_exported['time']}
-                }, 
-                sort=[('time', -1)]
-            )
+            q = {'record_type': last_exported['record_type'], 'record_id': last_exported['record_id']}
+
+            if export_id := last_exported.get('export_id'):
+                q['nonce.export_id'] = export_id
+            else:
+                # todo: get rid of this when possible to transition to using only export_id
+                q['nonce.export_start'] = Regex('^' + str(last_export_start)[:19]) # time strings might not match at microsecond level for some reason
+
+            callback_data = DB.handle[export.CALLBACK_COLLECTION].find_one(q, sort=[('time', -1)])
 
             if callback_data:
                 if callback_data['results'][0]['success'] == False:
                     # the last export was exported succesfully, but failed on import to DL. proceed with export
+                    print(f'There was an error in DL processing the last {flag} record. Proceeding.')
                     pass
                 elif flag == 'NEW':
                     # the record has been imported to DL but isn't searchable yet
+                    print(f'Callback received indicating sucessful import of {args.type}# {last_exported["record_id"]} @ {callback_data['time']}. Awaiting search indexing')
                     exit()
                 else:
                     # the record was exported and imported to DL succesfully, but DL did not record the update in
                     # the 005 field. this can happen if there were no changes to be made to the DL record.
                     warn(f'Possible redundant export not recorded in DL: {flag} {args.type}# {last_exported["record_id"]}')
             else:
+                print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
                 exit()
 
     # cycle through records in batches 
@@ -713,6 +714,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
     if export_type not in ('NEW', 'UPDATE', 'DELETE'):
         raise Exception('invalid "export_type"')
 
+    export_id = str(uuid.uuid4()) # random uuid
     xml = record.to_xml(xref_prefix='(DHLAUTH)')
     
     headers = {
@@ -720,7 +722,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
         'Content-Type': 'application/xml; charset=utf-8',
     }
 
-    nonce = {'type': args.type, 'id': record.id, 'export_start': str(export_start),'key': args.nonce_key}
+    nonce = {'type': args.type, 'id': record.id, 'export_start': str(export_start), 'export_id': export_id,'key': args.nonce_key}
     
     params = {
         'mode': mode,
@@ -732,6 +734,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
     
     logdata = {
         'export_start': export_start,
+        'export_id': export_id,
         'export_type': export_type,
         'time': datetime.now(timezone.utc),
         'source': args.source,
