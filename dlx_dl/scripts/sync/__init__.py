@@ -712,7 +712,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
         raise Exception('invalid "export_type"')
 
     export_id = str(uuid.uuid4()) # random uuid
-    xml = record.to_xml(xref_prefix='(DHLAUTH)')
+    xml = record.to_xml(xref_prefix='(DHLAUTH)', write_id=False)
     
     headers = {
         'Authorization': 'Token ' + args.api_key,
