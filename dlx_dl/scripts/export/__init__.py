@@ -175,7 +175,7 @@ def run(**kwargs):
             continue
             
         # export
-        xml = record.to_xml(xref_prefix='(DHLAUTH)')
+        xml = record.to_xml(xref_prefix='(DHLAUTH)', write_id=False)
         
         if args.use_api:
             if args.batch:
@@ -567,7 +567,7 @@ def encode_fn(symbols, language, extension):
     return '{}-{}.{}'.format('--'.join(xsymbols), language.upper(), extension)
 
 def submit_to_dl(record, export_start, args):
-    xml = record.to_xml(xref_prefix='(DHLAUTH)')
+    xml = record.to_xml(xref_prefix='(DHLAUTH)', write_id=False)
     
     headers = {
         'Authorization': 'Token ' + args.api_key,
