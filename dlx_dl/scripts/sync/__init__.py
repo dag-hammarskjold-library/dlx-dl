@@ -248,11 +248,16 @@ def run(**kwargs):
             retries = 0
             
             while response.status_code != 200:
-                print('retrying')        
+                print('retrying')  
+                      
                 if retries > 5: 
                     raise Exception(f'search API error: {response.text}')
                     
-                time.sleep(5 * retries)
+                if retries == 0:
+                    time.sleep(5)
+                else:
+                    time.sleep(300)
+                
                 retries += 1
                 response = requests.get(url, headers=HEADERS)
             
