@@ -359,12 +359,14 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     if cls == BibSet and not delete_only:
         fft_symbols = export._new_file_symbols(date_from, date_to)
     
-        if len(fft_symbols) > 10000:
+        if len(fft_symbols) > 100_000:
             raise Exception('that\'s too many file symbols to look up, sorry :(')
 
         print(f'found files for {len(fft_symbols)} symbols')
     else:
         fft_symbols = None
+
+    fft_uris = export._new_file_uris(date_from, date_to)
     
     if date_to:
         criteria = {'$and': [{'updated': {'$gte': date_from}}, {'updated': {'$lte': date_to}}]}
@@ -373,10 +375,15 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
         criteria = {'updated': {'$gte': date_from}}
         history_criteria = {'deleted.time': {'$gte': date_from}, 'deleted.user': {'$ne': 'HZN'}}
 
-    history_criteria
-
-    if cls == BibSet and fft_symbols:
-        query = {'$or': [criteria, {'191.subfields.value': {'$in': fft_symbols}}]}
+    if cls == BibSet:
+        if fft_symbols:
+            query = {
+                '$or': [
+                    criteria, 
+                    {'191.subfields.value': {'$in': fft_symbols}},
+                    {'561.subfields.value': {'$in': fft_uris}},
+                ]
+            }
     else:
         query = criteria
     

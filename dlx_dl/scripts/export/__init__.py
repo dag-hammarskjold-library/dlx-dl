@@ -527,6 +527,18 @@ def _new_file_symbols(date_from, date_to=None):
                 fft_symbols.append(idx['value'])
                 
     return list(set(fft_symbols))
+
+def _new_file_uris(date_from: datetime, date_to=None) -> list:
+    uris = []
+    criteria = {'$gte': date_from}
+    date_to and criteria.setdefault('$lte', date_to)
+
+    for f in DB.files.find({'$or': [{'timestamp': criteria}, {'updated': criteria}]}):
+        for idx in f['identifiers']:
+            if idx['type'] == 'uri' and idx['value'] != '' and idx['value'] != ' ' and idx['value'] != '***': # note: clean these up in db
+                uris.append(idx['value'])
+                
+    return list(set(uris))
     
 def _fft_from_files(bib):
     symbols = bib.get_values('191', 'a') + bib.get_values('191', 'z')
