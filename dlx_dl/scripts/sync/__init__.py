@@ -153,11 +153,11 @@ def run(**kwargs):
 
         # check if the record has been updated in DL yet
         flag = None 
-        last = Bib.from_xml(last_exported['xml'])
+        last = Bib.from_xml(last_exported['xml'], auth_control=False)
                             
         if 'DELETED' in (last.get_value('980', 'a'), last.get_value('980', 'c')):
             try:
-                last_dl_record = Bib.from_xml_raw(record_xml)
+                last_dl_record = Bib.from_xml_raw(record_xml, auth_control=False)
                 
                 # the record is hasn't been purged from DL yet
                 if 'DELETED' not in (last_dl_record.get_value('980', 'a'), last_dl_record.get_value('980', 'c')):
@@ -167,7 +167,7 @@ def run(**kwargs):
                 pass
         else:
             try:
-                last_dl_record = Bib.from_xml_raw(record_xml)
+                last_dl_record = Bib.from_xml_raw(record_xml, auth_control=False)
             except AssertionError as e:
                 if last_exported['export_type'] == 'NEW':
                     # last record not in DL yet
@@ -267,7 +267,7 @@ def run(**kwargs):
         
             # process DL XML
             for r in [] if col is None else col:
-                dl_record = Bib.from_xml_raw(r)
+                dl_record = Bib.from_xml_raw(r, auth_control=False, delete_subfield_zero=False)
                 _035 = next(filter(lambda x: re.match(r'^\(DHL', x), dl_record.get_values('035', 'a')), '')
 
                 if match := re.match(r'^\((DHL|DHLAUTH)\)(.*)', _035):
