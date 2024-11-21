@@ -8,8 +8,19 @@ jobs:
         name: Build Docker and Deploy Lambda
         runs-on: ubuntu-latest
         steps:
+        - name: get latest release with tag
+          id: latestrelease
+          run: |
+            echo "::set-output name=releasetag::$(curl -s https://api.github.com/repos/dag-hammarskjold-library/dlx-dl/releases/latest | jq '.tag_name' | sed 's/\"//g')"
+
+        - name: confirm release tag
+          run: |
+            echo ${{ steps.latestrelease.outputs.releasetag }}
+            
         - name: Checkout
           uses: actions/checkout@v3
+          with:
+            ref: ${{ steps.latestrelease.outputs.releasetag }}
 
         - name: Configure AWS credentials
           uses: aws-actions/configure-aws-credentials@v4
