@@ -169,10 +169,13 @@ def run(**kwargs):
             try:
                 last_dl_record = Bib.from_xml_raw(record_xml, auth_control=False)
             except AssertionError as e:
-                if last_exported['export_type'] == 'NEW':
+                if status := last_exported.get('export_type') == 'NEW':
                     # last record not in DL yet
                     flag = 'NEW'
                     last_dl_record = None
+                elif status == None:
+                    # record was probably exported by dlx-dl-export
+                    pass
                 else:
                     raise Exception(f'Last updated record not found by DL search API: {last_exported["record_type"]} {last_exported["record_id"]}')
             
@@ -301,7 +304,7 @@ def run(**kwargs):
                 dlx_record = next(filter(lambda x: x.id == dl_record.id, BATCH), None)
                 
                 if dlx_record is None:
-                    raise Exception('This shouldn\'t be possible. Possible network error.')
+                    raise Exception(f'Error matching {dl_record.id} with dlx record. This shouldn\'t be possible. Possible network error.\n{dl_record.to_mrk()}')
                 
                 # correct fields    
                 result = compare_and_update(args, dlx_record=dlx_record, dl_record=dl_record)
