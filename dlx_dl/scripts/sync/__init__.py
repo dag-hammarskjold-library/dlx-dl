@@ -114,7 +114,7 @@ def run(**kwargs):
     BATCH_SIZE = 100
     SEEN = 0
     UPDATED_COUNT = 0
-    print(f'Checking {marcset.count} updated records')
+    print(f'Checking {marcset.count} records')
 
     # check if last update cleared in DL yet
     if args.force:
@@ -188,6 +188,7 @@ def run(**kwargs):
 
                 if last_exported['time'] > dl_last_updated:
                     flag = 'UPDATE'
+        
         if flag:
             # check callback log to see if the last export had an import error in DL
             q = {'record_type': last_exported['record_type'], 'record_id': last_exported['record_id']}
@@ -208,14 +209,14 @@ def run(**kwargs):
                 elif flag == 'NEW':
                     # the record has been imported to DL but isn't searchable yet
                     print(f'Awaiting search indexing of last new record: {args.type}# {last_exported["record_id"]}. Callback received indicating sucessful import @ {callback_data["time"]}.')
-                    exit()
+                    return -1
                 else:
                     # the record was exported and imported to DL succesfully, but DL did not record the update in
                     # the 005 field. this can happen if there were no changes to be made to the DL record.
                     warn(f'Possible redundant export not recorded in DL: {flag} {args.type}# {last_exported["record_id"]}')
             else:
                 print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
-                exit()
+                return -1
 
     # cycle through records in batches 
     enqueue, to_remove = False, []
@@ -352,6 +353,8 @@ def run(**kwargs):
             print(f'{result.upserted_count} added. {i + 1 - result.upserted_count} were already in the queue')
 
     print(f'Updated {UPDATED_COUNT} records')
+
+    return UPDATED_COUNT
 
 def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     """
