@@ -93,7 +93,13 @@ def get_args(**kwargs):
      
     return parser.parse_args()
 
-def run(**kwargs):
+def run(**kwargs) -> int:
+    """
+    Main function. Arguments are described and parsed in the `get_args` 
+    function. Returns the number of records updated, or -1 if export was
+    aborted. 
+    """
+
     args = get_args(**kwargs)
 
     if isinstance(kwargs.get('connect'), MockClient):
