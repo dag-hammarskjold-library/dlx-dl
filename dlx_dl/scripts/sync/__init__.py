@@ -772,7 +772,8 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
     DB.handle[export.LOG_COLLECTION].insert_one(logdata)
     logdata['export_start'] = logdata['export_start'].isoformat()
     logdata['time'] = logdata['time'].isoformat()
-    print(logdata)
+    logdata.pop('_id', None)
+    print(json.dumps(logdata))
 
     return logdata
 
