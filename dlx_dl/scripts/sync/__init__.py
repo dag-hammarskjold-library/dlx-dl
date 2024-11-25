@@ -36,10 +36,10 @@ def get_args(**kwargs):
     parser.add_argument('--modified_since_log', action='store_true')
     parser.add_argument('--limit', help='limit the number of exports', type=int, default=1000)
     parser.add_argument('--time_limit', help='runtime limit in seconds', type=int, default=600)
-    parser.add_argument('--queue', action='store_true', help='try to export ercords in queue and add to queue if export exceeds limits')
+    parser.add_argument('--queue', action='store_true', help='try to export records in queue and add to queue if export exceeds limits')
     parser.add_argument('--delete_only', action='store_true')
     parser.add_argument('--use_auth_cache', action='store_true')
-    parser.add_argument('--use_api', action='store_true')
+    parser.add_argument('--missing_only', action='store_true')
 
     r = parser.add_argument_group('required')
     r.add_argument('--source', required=True, help='an identity to use in the log')
@@ -258,7 +258,7 @@ def run(**kwargs) -> int:
             retries = 0
             
             while response.status_code != 200:
-                print('retrying')  
+                print(f'retrying: {url}\n{response.text}')  
                       
                 if retries > 5: 
                     raise Exception(f'search API error: {response.text}')
@@ -266,6 +266,7 @@ def run(**kwargs) -> int:
                 if retries == 0:
                     time.sleep(5)
                 else:
+                    print('API rate limit likely exceeded. waiting 5 minutes')
                     time.sleep(300)
                 
                 retries += 1
@@ -305,6 +306,12 @@ def run(**kwargs) -> int:
                     
                 # remove from queue
                 to_remove.append(dlx_record.id)
+
+            # end here if only adding missing records
+            if args.missing_only:
+                # clear batch
+                BATCH = []
+                continue
             
             # scan and compare DL records
             for dl_record in DL_BATCH:
