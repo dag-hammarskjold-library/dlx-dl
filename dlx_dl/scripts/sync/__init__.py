@@ -396,6 +396,8 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
                     {'561.subfields.value': {'$in': fft_uris}},
                 ]
             }
+        else:
+            query = criteria
     else:
         query = criteria
     
