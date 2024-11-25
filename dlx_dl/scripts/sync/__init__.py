@@ -672,12 +672,19 @@ def compare_and_update(args, *, dlx_record, dl_record):
 
                 return export_whole_record(args, dlx_record, export_type='UPDATE')
 
+    # for comparing number of files in each system
+    all_dlx_files = []
+
     # records with file URI in 561
     uris = dlx_record.get_values('561', 'u')
 
     for uri in uris:
         if files := list(File.find_by_identifier(Identifier('uri', uri))):
             latest = sorted(files, key=lambda x: x.timestamp, reverse=True)[0]
+            
+            if f.id not in [x.id for x in all_dlx_files.append(latest)]:
+                    all_dlx_files.apppend(latest)
+
             # filename and size should be same in DL
             fn = uri.split('/')[-1]
 
@@ -695,6 +702,9 @@ def compare_and_update(args, *, dlx_record, dl_record):
            
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             if f := File.latest_by_identifier_language(Identifier('symbol', symbol), lang):
+                if f.id not in [x.id for x in all_dlx_files.append(f)]:
+                    all_dlx_files.apppend(f)
+
                 field = next(filter(lambda x: re.search(fr'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
                 
                 if field:
@@ -712,6 +722,13 @@ def compare_and_update(args, *, dlx_record, dl_record):
                     print(f'{dlx_record.id}: FILE NOT FOUND - {symbol}-{lang}')
                     
                     return export_whole_record(args, dlx_record, export_type='UPDATE')
+
+    # check if there are a different number of files in DL than DLX
+    dl_files = [x for x in dl_record.get_fields('856') if re.match(r'http[s]?://digitallibrary.un.org', x.get_value('u'))]
+    
+    if len(dl_files) != len(all_dlx_files):
+        print(f'EXTRA FILES DETECTED - {[x.to_mrk() for x in dl_files]}\n{[f.to_dict() for f in all_dlx_files]}')
+        return export_whole_record(args, dlx_record, export_type='UPDATE')
 
     # run api submission
     if take_tags or delete_fields:
