@@ -93,7 +93,13 @@ def get_args(**kwargs):
      
     return parser.parse_args()
 
-def run(**kwargs):
+def run(**kwargs) -> int:
+    """
+    Main function. Arguments are described and parsed in the `get_args` 
+    function. Returns the number of records updated, or -1 if export was
+    aborted. 
+    """
+
     args = get_args(**kwargs)
 
     if isinstance(kwargs.get('connect'), MockClient):
@@ -114,7 +120,7 @@ def run(**kwargs):
     BATCH_SIZE = 100
     SEEN = 0
     UPDATED_COUNT = 0
-    print(f'Checking {marcset.count} updated records')
+    print(f'Checking {marcset.count} records')
 
     # check if last update cleared in DL yet
     if args.force:
@@ -169,10 +175,13 @@ def run(**kwargs):
             try:
                 last_dl_record = Bib.from_xml_raw(record_xml, auth_control=False)
             except AssertionError as e:
-                if last_exported['export_type'] == 'NEW':
+                if status := last_exported.get('export_type') == 'NEW':
                     # last record not in DL yet
                     flag = 'NEW'
                     last_dl_record = None
+                elif status == None:
+                    # record was probably exported by dlx-dl-export
+                    pass
                 else:
                     raise Exception(f'Last updated record not found by DL search API: {last_exported["record_type"]} {last_exported["record_id"]}')
             
@@ -185,6 +194,7 @@ def run(**kwargs):
 
                 if last_exported['time'] > dl_last_updated:
                     flag = 'UPDATE'
+        
         if flag:
             # check callback log to see if the last export had an import error in DL
             q = {'record_type': last_exported['record_type'], 'record_id': last_exported['record_id']}
@@ -205,14 +215,14 @@ def run(**kwargs):
                 elif flag == 'NEW':
                     # the record has been imported to DL but isn't searchable yet
                     print(f'Awaiting search indexing of last new record: {args.type}# {last_exported["record_id"]}. Callback received indicating sucessful import @ {callback_data["time"]}.')
-                    exit()
+                    return -1
                 else:
                     # the record was exported and imported to DL succesfully, but DL did not record the update in
                     # the 005 field. this can happen if there were no changes to be made to the DL record.
                     warn(f'Possible redundant export not recorded in DL: {flag} {args.type}# {last_exported["record_id"]}')
             else:
                 print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
-                exit()
+                return -1
 
     # cycle through records in batches 
     enqueue, to_remove = False, []
@@ -301,7 +311,7 @@ def run(**kwargs):
                 dlx_record = next(filter(lambda x: x.id == dl_record.id, BATCH), None)
                 
                 if dlx_record is None:
-                    raise Exception('This shouldn\'t be possible. Possible network error.')
+                    raise Exception(f'Error matching {dl_record.id} with dlx record. This shouldn\'t be possible. Possible network error.\n{dl_record.to_mrk()}')
                 
                 # correct fields    
                 result = compare_and_update(args, dlx_record=dlx_record, dl_record=dl_record)
@@ -350,6 +360,8 @@ def run(**kwargs):
 
     print(f'Updated {UPDATED_COUNT} records')
 
+    return UPDATED_COUNT
+
 def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     """
     Returns
@@ -384,6 +396,8 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
                     {'561.subfields.value': {'$in': fft_uris}},
                 ]
             }
+        else:
+            query = criteria
     else:
         query = criteria
     
@@ -577,9 +591,10 @@ def compare_and_update(args, *, dlx_record, dl_record):
         if normalize(field.to_mrk()) not in [normalize(x) for x in dlx_fields_serialized]:
             # compare tag + indicators
             if field.tag + ''.join(field.indicators) in [x.tag + ''.join(x.indicators) for x in dlx_fields]:
-                # this should already be taken care of in dlx->dl
-                print(f'{dlx_record.id}: SUPERCEDED: {field.to_mrk()}')
-                take_tags.add(field.tag)
+                if field.tag not in take_tags:
+                    # this should already be taken care of in dlx->dl
+                    print(f'{dlx_record.id}: SUPERSEDED: {field.to_mrk()}')
+                    take_tags.add(field.tag)
             else:
                 # delete fields where the tag + indicators combo does not exist in dl record
                 print(f'{dlx_record.id}: TO DELETE: {field.to_mrk()}')
@@ -757,7 +772,8 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
     DB.handle[export.LOG_COLLECTION].insert_one(logdata)
     logdata['export_start'] = logdata['export_start'].isoformat()
     logdata['time'] = logdata['time'].isoformat()
-    print(logdata)
+    logdata.pop('_id', None)
+    print(json.dumps(logdata))
 
     return logdata
 

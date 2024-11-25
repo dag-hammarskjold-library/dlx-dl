@@ -224,17 +224,27 @@ def test_561(db, tmp_path):
 
 def test_sync(db, capsys, mock_get_post):
     # todo: expand this test
+    import json
     from http.server import HTTPServer
     from dlx import DB
     from dlx.marc import Bib
     
     bib = Bib().set('245', 'a', 'Will self destruct')
     bib.commit()
-    bib.delete()
 
     sync.run(connect=db, source='test', type='bib', modified_within=100, force=True)
+    
     data = list(filter(None, capsys.readouterr().out.split('\n')))
-    assert data
+    logged = json.loads(data[4])
+    assert logged.get('record_id') == bib.id
+    assert logged.get('response_code') == 200
+    assert DB.handle['dlx_dl_log'].find_one({'record_id': bib.id})
+
+    # no files
+    DB.handle['files'].delete_many({})
+    sync.run(connect=db, source='test', type='bib', modified_within=100, force=True)
+    data = list(filter(None, capsys.readouterr().out.split('\n')))
+    assert 'Updated 3 records' in data[-1]
 
     # skip special user
     bib = Bib().set('245', 'a', 'Moar testing')
