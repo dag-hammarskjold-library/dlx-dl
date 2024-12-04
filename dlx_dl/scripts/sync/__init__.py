@@ -709,8 +709,8 @@ def compare_and_update(args, *, dlx_record, dl_record):
            
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             if f := File.latest_by_identifier_language(Identifier('symbol', symbol), lang):
-                if f.id not in [x.id for x in all_dlx_files.append(f)]:
-                    all_dlx_files.apppend(f)
+                if f.id not in [x.id for x in all_dlx_files]:
+                    all_dlx_files.append(f)
 
                 field = next(filter(lambda x: re.search(fr'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
                 
