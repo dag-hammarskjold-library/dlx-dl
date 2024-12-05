@@ -704,9 +704,8 @@ def compare_and_update(args, *, dlx_record, dl_record):
     symbols = (dlx_record.get_values('191', 'a') + dlx_record.get_values('191', 'z')) if args.type == 'bib' else []
     
     for symbol in set(symbols):
-        if symbol == '' or symbol == ' ' or symbol == '***': # note: clean these up in db
-            continue
-           
+        if symbol == '' or symbol == ' ' or symbol == '***': continue # note: clean these up in db
+
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             if f := File.latest_by_identifier_language(Identifier('symbol', symbol), lang):
                 if f.id not in [x.id for x in all_dlx_files]:
