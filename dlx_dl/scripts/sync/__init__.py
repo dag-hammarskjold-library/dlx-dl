@@ -262,12 +262,12 @@ def run(**kwargs) -> int:
                       
                 if retries > 5: 
                     raise Exception(f'search API error: {response.text}')
-                    
-                if retries == 0:
-                    time.sleep(5)
+                
+                if 'Max 100 requests per 5 minutes' in json.loads(response.text).get('error'):
+                    print('API rate limit exceeded. waiting 5 minutes')
+                    time.sleep(310)
                 else:
-                    print('API rate limit likely exceeded. waiting 5 minutes')
-                    time.sleep(300)
+                    time.sleep((retries if retries else 1) * 5)
                 
                 retries += 1
                 response = requests.get(url, headers=HEADERS)
@@ -689,8 +689,8 @@ def compare_and_update(args, *, dlx_record, dl_record):
         if files := list(File.find_by_identifier(Identifier('uri', uri))):
             latest = sorted(files, key=lambda x: x.timestamp, reverse=True)[0]
             
-            if f.id not in [x.id for x in all_dlx_files.append(latest)]:
-                    all_dlx_files.apppend(latest)
+            if f.id not in [x.id for x in all_dlx_files]:
+                    all_dlx_files.append(latest)
 
             # filename and size should be same in DL
             fn = uri.split('/')[-1]
@@ -709,8 +709,8 @@ def compare_and_update(args, *, dlx_record, dl_record):
            
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             if f := File.latest_by_identifier_language(Identifier('symbol', symbol), lang):
-                if f.id not in [x.id for x in all_dlx_files.append(f)]:
-                    all_dlx_files.apppend(f)
+                if f.id not in [x.id for x in all_dlx_files]:
+                    all_dlx_files.append(f)
 
                 field = next(filter(lambda x: re.search(fr'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
                 
@@ -732,8 +732,10 @@ def compare_and_update(args, *, dlx_record, dl_record):
 
     # check if there are a different number of files in DL than DLX
     dl_files = [x for x in dl_record.get_fields('856') if re.match(r'http[s]?://digitallibrary.un.org', x.get_value('u'))]
-    
-    if len(dl_files) != len(all_dlx_files):
+    # files that came from whitelisted 856 urls are not currently in the dlx filestore 
+    dl_file_count = len(dl_files) - len([x for x in dlx_record.get_fields('856') if urlparse(x.get_value('u')).netloc in export.WHITELIST])
+
+    if dl_file_count != len(all_dlx_files):
         print(f'EXTRA FILES DETECTED - {[x.to_mrk() for x in dl_files]}\n{[f.to_dict() for f in all_dlx_files]}')
         return export_whole_record(args, dlx_record, export_type='UPDATE')
 
