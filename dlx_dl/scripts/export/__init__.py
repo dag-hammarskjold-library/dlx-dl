@@ -460,6 +460,9 @@ def _980(record):
         if atag == '110':
             if record.heading_field.get_value('9') == 'ms':
                 record.set('980', 'a', 'MEMBER', address=['+'])
+        elif atag == '150':
+            if record.heading_field.indicators[0] == "9" or 'http://metadata.un.org/thesaurus' not in record.get_values('035', 'a'):
+                record.set('980', 'a', 'GEOGRAPHIC')
 
     return record
 

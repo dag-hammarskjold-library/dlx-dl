@@ -36,10 +36,10 @@ def get_args(**kwargs):
     parser.add_argument('--modified_since_log', action='store_true')
     parser.add_argument('--limit', help='limit the number of exports', type=int, default=1000)
     parser.add_argument('--time_limit', help='runtime limit in seconds', type=int, default=600)
-    parser.add_argument('--queue', action='store_true', help='try to export ercords in queue and add to queue if export exceeds limits')
+    parser.add_argument('--queue', action='store_true', help='try to export records in queue and add to queue if export exceeds limits')
     parser.add_argument('--delete_only', action='store_true')
     parser.add_argument('--use_auth_cache', action='store_true')
-    parser.add_argument('--use_api', action='store_true')
+    parser.add_argument('--missing_only', action='store_true')
 
     r = parser.add_argument_group('required')
     r.add_argument('--source', required=True, help='an identity to use in the log')
@@ -258,15 +258,16 @@ def run(**kwargs) -> int:
             retries = 0
             
             while response.status_code != 200:
-                print('retrying')  
+                print(f'retrying: {url}\n{response.text}')  
                       
                 if retries > 5: 
                     raise Exception(f'search API error: {response.text}')
-                    
-                if retries == 0:
-                    time.sleep(5)
+                
+                if 'Max 100 requests per 5 minutes' in json.loads(response.text).get('error'):
+                    print('API rate limit exceeded. waiting 5 minutes')
+                    time.sleep(310)
                 else:
-                    time.sleep(300)
+                    time.sleep((retries if retries else 1) * 5)
                 
                 retries += 1
                 response = requests.get(url, headers=HEADERS)
@@ -305,6 +306,12 @@ def run(**kwargs) -> int:
                     
                 # remove from queue
                 to_remove.append(dlx_record.id)
+
+            # end here if only adding missing records
+            if args.missing_only:
+                # clear batch
+                BATCH = []
+                continue
             
             # scan and compare DL records
             for dl_record in DL_BATCH:
@@ -672,12 +679,19 @@ def compare_and_update(args, *, dlx_record, dl_record):
 
                 return export_whole_record(args, dlx_record, export_type='UPDATE')
 
+    # for comparing number of files in each system
+    all_dlx_files = []
+
     # records with file URI in 561
     uris = dlx_record.get_values('561', 'u')
 
     for uri in uris:
         if files := list(File.find_by_identifier(Identifier('uri', uri))):
             latest = sorted(files, key=lambda x: x.timestamp, reverse=True)[0]
+            
+            if f.id not in [x.id for x in all_dlx_files]:
+                    all_dlx_files.append(latest)
+
             # filename and size should be same in DL
             fn = uri.split('/')[-1]
 
@@ -690,11 +704,13 @@ def compare_and_update(args, *, dlx_record, dl_record):
     symbols = (dlx_record.get_values('191', 'a') + dlx_record.get_values('191', 'z')) if args.type == 'bib' else []
     
     for symbol in set(symbols):
-        if symbol == '' or symbol == ' ' or symbol == '***': # note: clean these up in db
-            continue
-           
+        if symbol == '' or symbol == ' ' or symbol == '***': continue # note: clean these up in db
+
         for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
             if f := File.latest_by_identifier_language(Identifier('symbol', symbol), lang):
+                if f.id not in [x.id for x in all_dlx_files]:
+                    all_dlx_files.append(f)
+
                 field = next(filter(lambda x: re.search(fr'{lang}\.\w+$', x.get_value('u')), dl_record.get_fields('856')), None)
                 
                 if field:
@@ -712,6 +728,15 @@ def compare_and_update(args, *, dlx_record, dl_record):
                     print(f'{dlx_record.id}: FILE NOT FOUND - {symbol}-{lang}')
                     
                     return export_whole_record(args, dlx_record, export_type='UPDATE')
+
+    # check if there are a different number of files in DL than DLX
+    dl_files = [x for x in dl_record.get_fields('856') if re.match(r'http[s]?://digitallibrary.un.org', x.get_value('u'))]
+    # files that came from whitelisted 856 urls are not currently in the dlx filestore 
+    dl_file_count = len(dl_files) - len([x for x in dlx_record.get_fields('856') if urlparse(x.get_value('u')).netloc in export.WHITELIST])
+
+    if dl_file_count != len(all_dlx_files):
+        print(f'EXTRA FILES DETECTED - {[x.to_mrk() for x in dl_files]}\n{[f.to_dict() for f in all_dlx_files]}')
+        return export_whole_record(args, dlx_record, export_type='UPDATE')
 
     # run api submission
     if take_tags or delete_fields:
