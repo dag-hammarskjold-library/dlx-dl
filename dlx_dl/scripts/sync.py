@@ -734,10 +734,12 @@ def compare_and_update(args, *, dlx_record, dl_record):
     # files that came from whitelisted 856 urls are not currently in the dlx filestore 
     dl_file_count = len(dl_files) - len([x for x in dlx_record.get_fields('856') if urlparse(x.get_value('u')).netloc in export.WHITELIST])
 
-    if dl_file_count != len(all_dlx_files):
-        print(f'EXTRA FILES DETECTED - {[x.to_mrk() for x in dl_files]}\n{[f.to_dict() for f in all_dlx_files]}')
-        return export_whole_record(args, dlx_record, export_type='UPDATE')
-
+    # skip this for now. does not delete extra files in DL
+    if False: #dl_file_count != len(all_dlx_files):
+        #print(f'EXTRA FILES DETECTED - {[x.to_mrk() for x in dl_files]}\n{[f.to_dict() for f in all_dlx_files]}')
+        #return export_whole_record(args, dlx_record, export_type='UPDATE')
+        pass
+    
     # run api submission
     if take_tags or delete_fields:
         record = Bib() if args.type == 'bib' else Auth()
