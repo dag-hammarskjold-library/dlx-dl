@@ -23,9 +23,6 @@ def run() -> None:
     increment = int(args.increment) or 1000
     last_updated_count = None
 
-    # worth taking the time to build the cache up front, as this should be a long running process
-    Auth.build_cache()
-
     while 1:
         # loop breaks when max id in the database is reached
 
