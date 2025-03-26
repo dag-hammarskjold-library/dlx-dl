@@ -461,8 +461,12 @@ def _980(record):
             if record.heading_field.get_value('9') == 'ms':
                 record.set('980', 'a', 'MEMBER', address=['+'])
         elif atag == '150':
-            if record.heading_field.indicators[0] == "9" or 'http://metadata.un.org/thesaurus' not in record.get_values('035', 'a'):
-                record.set('980', 'a', 'GEOGRAPHIC')
+            thesaurus_url = 'http://metadata.un.org/thesaurus'
+
+            # records without the thesaurus url in 035$a are considered geogprahic terms
+            if record.heading_field.indicators[0] == "9" \
+                or not any([x[:len(thesaurus_url)] == thesaurus_url for x in record.get_values('035', 'a')]): # not any value starts with the url
+                    record.set('980', 'a', 'GEOGRAPHIC')
 
     return record
 
