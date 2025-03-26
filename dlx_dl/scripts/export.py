@@ -454,9 +454,6 @@ def _980(record):
     atag = record.heading_field.tag
     
     if atag in AUTH_TYPE.keys():
-        atype = AUTH_TYPE[atag]
-        record.set('980', 'a', atype, address=['+'])
-            
         if atag == '110':
             if record.heading_field.get_value('9') == 'ms':
                 record.set('980', 'a', 'MEMBER', address=['+'])
@@ -467,6 +464,9 @@ def _980(record):
             if record.heading_field.indicators[0] == "9" \
                 or not any([x[:len(thesaurus_url)] == thesaurus_url for x in record.get_values('035', 'a')]): # not any value starts with the url
                     record.set('980', 'a', 'GEOGRAPHIC')
+            
+        atype = AUTH_TYPE[atag]
+        record.set('980', 'a', atype, address=['+'])
 
     return record
 
