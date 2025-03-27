@@ -455,11 +455,13 @@ def _980(record):
     atag = record.heading_field.tag
     
     if atag in AUTH_TYPE.keys():
-        if atag == '150':
-            # records without the thesaurus url in 035$a are considered geogprahic terms
-            if record.heading_field.indicators[0] == "9" \
-                or not any([x[:len(THESAURUS_URL)] == THESAURUS_URL for x in record.get_values('035', 'a')]): # not any value starts with the url
-                    record.set('980', 'a', 'GEOGRAPHIC', address=['+'])
+        # records without the thesaurus url in 035$a are considered geogprahic terms
+        if atag == '150' \
+            and (
+                record.heading_field.indicators[0] == "9" \
+                or not any([x[:len(THESAURUS_URL)] == THESAURUS_URL for x in record.get_values('035', 'a')]) # not any value starts with the url
+            ):
+                record.set('980', 'a', 'GEOGRAPHIC', address=['+'])
         else:
             atype = AUTH_TYPE[atag]
             record.set('980', 'a', atype, address=['+'])
