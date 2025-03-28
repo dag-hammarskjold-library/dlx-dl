@@ -689,8 +689,8 @@ def compare_and_update(args, *, dlx_record, dl_record):
         if files := list(File.find_by_identifier(Identifier('uri', uri))):
             latest = sorted(files, key=lambda x: x.timestamp, reverse=True)[0]
             
-            if f.id not in [x.id for x in all_dlx_files]:
-                    all_dlx_files.append(latest)
+            if latest.id not in [x.id for x in all_dlx_files]:
+                all_dlx_files.append(latest)
 
             # filename and size should be same in DL
             fn = uri.split('/')[-1]
