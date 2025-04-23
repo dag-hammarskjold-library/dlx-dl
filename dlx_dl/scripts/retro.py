@@ -30,12 +30,12 @@ def run() -> None:
         if DB.connected:
             DB.disconnect()
 
-        # don't run between 2AM and 7PM Monday - Friday
+        # don't run between 4AM and 7PM Monday - Friday
         if not args.force:
             dt = datetime.now(timezone.utc).astimezone(pytz.timezone('America/New_York'))
             tries = 0
 
-            while dt.weekday() < 5 and dt.hour >= 2 and dt.hour < 19:
+            while dt.weekday() < 5 and dt.hour >= 4 and dt.hour < 19:
                 if tries == 0:
                     print('sleeping until 7PM...')
 
