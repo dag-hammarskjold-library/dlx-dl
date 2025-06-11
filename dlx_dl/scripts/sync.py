@@ -410,8 +410,9 @@ def get_records_by_date(cls, date_from, date_to=None, delete_only=False):
     
     # records to delete
     history = DB.handle['bib_history'] if cls == BibSet else DB.handle['auth_history']
-    deleted = list(history.find(history_criteria))
-
+    # filter out records that have been restored since they were last deleted
+    deleted = [x for x in history.find(history_criteria) if not x.get('restored') or x.get('restored', {}).get('time') > x['deleted']]
+               
     # sort to ensure latest updates are checked first
     if delete_only:
         # todo: fix this in dlx. MarcSet.count not working unless created by .from_query
