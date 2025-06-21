@@ -2,5 +2,6 @@
     "source": "dlx-dl-lambda",
     "type": "auth",
     "modified_within": 86400,
-    "queue": true
+    "queue": true,
+    "email": "nofeedback@tind.io"
 }

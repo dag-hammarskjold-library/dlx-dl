@@ -20,7 +20,7 @@ setup(
     description = 'Export data fom DLX to DL',
     long_description = long_description,
     long_description_content_type = "text/markdown",
-    python_requires = '>=3.8, <3.13',
+    python_requires = '>=3.8, <3.14',
     entry_points = {
         'console_scripts': [
             'dlx-dl=dlx_dl.scripts.export:run', # to deprecate

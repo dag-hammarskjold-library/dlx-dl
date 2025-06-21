@@ -783,7 +783,8 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
     params = {
         'mode': mode,
         'callback_url': args.callback_url,
-        'nonce': json.dumps(nonce)
+        'nonce': json.dumps(nonce),
+        'email': args.email
     } 
 
     response = requests.post(API_RECORD_URL, params=params, headers=headers, data=xml.encode('utf-8'))
