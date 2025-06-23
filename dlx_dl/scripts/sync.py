@@ -783,7 +783,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
     params = {
         'mode': mode,
         'callback_url': args.callback_url,
-        'email': 'nofeedback@tind.io',
+        'callback_email': 'nofeedback@tind.io',
         'nonce': json.dumps(nonce)
     } 
 
