@@ -7,13 +7,14 @@ from dlx.marc import DB, Bib, Auth
 @pytest.fixture
 def db():
     DB.connect('mongomock://localhost') # mock DB
-    data = {'_id': 1}
-    data['updated'] = datetime.now(timezone.utc) - timedelta(hours=1)
-    DB.bibs.insert_one(data)
-    data = {'_id': 1}
-    data['updated'] = datetime.now(timezone.utc) - timedelta(hours=1)
-    DB.auths.insert_one(data)
+    
+    for col in (DB.bibs, DB.auths):
+        # Two records in both cols: first updated 3 hours ago, second updated 1 hour ago
+        col.insert_many([
+            {'_id': x, 'updated': datetime.now(timezone.utc) - timedelta(hours=y)} for x, y in [(1, 3), (2, 1)]
+        ])
 
+    # Last export: 4 hours ago
     DB.handle['dlx_dl_log'].insert_many(
         [
             {
@@ -35,11 +36,11 @@ def db():
 def test_run(db):
     from dlx_dl.scripts import alert
 
-    # four hours since last bib and auth export
+    # Records have been pending for more than two hours 
     sys.argv[1:] = ['--connect', 'mongomock://localhost']
     assert alert.run() is True
 
-    # a bib has been exported within two hours, but not auth
+    # A bib has been exported within two hours, but not auth
     DB.handle['dlx_dl_log'].insert_one(
         {
             'record_type': 'bib',
@@ -49,7 +50,7 @@ def test_run(db):
     )
     assert alert.run() is True
 
-    # auths and bibs have been exported within two hours. no alert
+    # Auths and bibs have been pending less than two hours. No alert
     DB.handle['dlx_dl_log'].insert_one(
         {
             'record_type': 'auth',

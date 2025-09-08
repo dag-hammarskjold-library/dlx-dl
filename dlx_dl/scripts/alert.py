@@ -21,12 +21,12 @@ def run() -> bool:
         last_updated = cls.from_query({}, sort=[('updated', -1)], limit=1)
         
         # It's been more than two hours since last record updated, indicating system inactivity
-        if elapsed(last_updated) > 7200:
+        if elapsed(last_updated.updated).seconds > 7200:
             continue
 
         # Records have been updated since the last export
         if updated_since_export := cls.from_query({'updated': {'$gt': last_exported['time']}}, sort=[('updated', 1)], limit=1):
-            pending_seconds = elapsed(updated_since_export.updated)
+            pending_seconds = elapsed(updated_since_export.updated).seconds
 
             # Updates have been pending for more than two hours
             if pending_seconds > 7200:
