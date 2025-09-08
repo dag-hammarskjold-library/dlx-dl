@@ -35,9 +35,11 @@ def db():
 def test_run(db):
     from dlx_dl.scripts import alert
 
+    # four hours since last bib and auth export
     sys.argv[1:] = ['--connect', 'mongomock://localhost']
     assert alert.run() is True
 
+    # a bib has been exported within two hours, but not auth
     DB.handle['dlx_dl_log'].insert_one(
         {
             'record_type': 'bib',
@@ -47,6 +49,7 @@ def test_run(db):
     )
     assert alert.run() is True
 
+    # auths and bibs have been exported within two hours. no alert
     DB.handle['dlx_dl_log'].insert_one(
         {
             'record_type': 'auth',

@@ -15,18 +15,23 @@ def run() -> bool:
     log = DB.handle.get_collection('dlx_dl_log')
     alert = False
 
+    # Check bibs and auths for export pending time
     for cls in (Bib, Auth):
-        last_updated_record = cls.from_query({}, sort=[('updated', -1)], limit=1)
+        last_exported = log.find_one({'source': 'dlx-dl-lambda', 'record_type': 'bib' if cls == Bib else 'auth'}, sort=[('time', -1)])
+        last_updated = cls.from_query({}, sort=[('updated', -1)], limit=1)
+        
+        # It's been more than two hours since last record updated, indicating system inactivity
+        if elapsed(last_updated) > 7200:
+            continue
 
-        if elapsed(last_updated_record.updated).seconds < 7200:
-            
-            # Records have been updated in the last two hours
-            last_exported = log.find_one({'source': 'dlx-dl-lambda', 'record_type': 'bib' if cls == Bib else 'auth'}, sort=[('time', -1)])
+        # Records have been updated since the last export
+        if updated_since_export := cls.from_query({'updated': {'$gt': last_exported['time']}}, sort=[('updated', 1)], limit=1):
+            pending_seconds = elapsed(updated_since_export.updated)
 
-            if elapsed(last_exported['time']).seconds > 7200:
-                # It's been more than two hours since records were exported to UNDL
+            # Updates have been pending for more than two hours
+            if pending_seconds > 7200:
                 alert = True
-                message = f"It's been more than two hours between {'bib' if cls == Bib else 'auth'} updates in Central DB and exports to UNDL"
+                message = f"It's been more than {int(pending_seconds / 60)} hours between {'bib' if cls == Bib else 'auth'} updates in Central DB and exports to UNDL"
                 print('Sending alert notification that records are out of sync')
                 notify(message)
 
