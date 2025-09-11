@@ -1,8 +1,6 @@
-import sys, pytest, time
-import boto3
-from moto import mock_aws
+import pytest, math
 from datetime import datetime, timezone, timedelta
-from dlx.marc import DB, Bib, Auth
+from dlx import DB
 
 @pytest.fixture
 def db():
@@ -32,45 +30,21 @@ def db():
 
     return DB.client
 
-@mock_aws
-def test_run(db):
-    sys.argv[1:] = [
-        '--connect', 'mongomock://localhost', 
-        '--database', 'testing', 
-        '--topic_arn', 'x:x', 
-        '--pending_time', '7200',
-        '--alert_frequency', '21600'
-    ]
-    from dlx_dl.scripts import alert
+def test_pending_status(db):
+    from dlx_dl.util import PendingStatus
 
-    # Records have been pending for more than two hours
-    assert alert.run()
+    status = PendingStatus(collection='bibs')
+    assert round(status.pending_time / 60 / 60) == 3 # round to 3 hours
+    assert len(status.pending_records) == 2
 
-    # Alerts have been sent within alert frequency
-    assert alert.run() is None
-
-    # Delete the alert log info
-    DB.handle.get_collection('dlx_dl_alert').delete_many({})
-
-    # A bib has been exported within two hours, but not auth
     DB.handle['dlx_dl_log'].insert_one(
         {
             'record_type': 'bib',
             'time': datetime.now(timezone.utc) - timedelta(hours=1),
             'source': 'dlx-dl-lambda'
-        },
+        }
     )
-    assert alert.run()
 
-    # Auths and bibs have been pending less than two hours. No alert
-    DB.handle['dlx_dl_log'].insert_one(
-        {
-            'record_type': 'auth',
-            'time': datetime.now(timezone.utc) - timedelta(hours=1),
-            'source': 'dlx-dl-lambda'
-        },
-    )
-    assert alert.run() is None
-
-
-
+    status = PendingStatus(collection='bibs')
+    assert status.pending_time == 0
+    assert len(status.pending_records) == 0
