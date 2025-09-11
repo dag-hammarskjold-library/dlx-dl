@@ -1,4 +1,4 @@
-import sys, pytest
+import sys, pytest, time
 import boto3
 from moto import mock_aws
 from datetime import datetime, timezone, timedelta
@@ -38,12 +38,19 @@ def test_run(db):
         '--connect', 'mongomock://localhost', 
         '--database', 'testing', 
         '--topic_arn', 'x:x', 
-        '--pending_time', '7200'
+        '--pending_time', '7200',
+        '--alert_frequency', '21600'
     ]
     from dlx_dl.scripts import alert
 
     # Records have been pending for more than two hours
     assert alert.run()
+
+    # Alerts have been sent within alert frequency
+    assert alert.run() is None
+
+    # Delete the alert log info
+    DB.handle.get_collection('dlx_dl_alert').delete_many({})
 
     # A bib has been exported within two hours, but not auth
     DB.handle['dlx_dl_log'].insert_one(
