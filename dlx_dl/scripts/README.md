@@ -10,6 +10,10 @@ Exports whole records that match the given citeria. The records can be exported 
 
 Compares records between the two systems that match the given criteria, and updates any records in UNDL that are different using the submission API run in "correct" mode. Only the fields that are different are updated. This process is also called to run on a schedule in AWS Lambda, which automates all updates to UNDL.
 
+### alert.py
+
+Checks both bibs and auths for records pending export. Records that have been updated in the database since the last export to UNDL are considereed to be pending. If the pending time is longer than the tinme set in the script arguments, an email is sent using AWS SNS. A SNS Topic with a Topic ARN is required to be configured for the alert to be sent.
+
 ### retro.py
 
 Runs `sync.py` over a potentially large range of IDs during non-business hours. This is intended to compare and update any records that may not have been properply updated in UNDL in the past for whatever reason, and have not been updated in dlx recently. It manages the sync runs in batches so that they do not overwhelm the UNDL APIs. It runs continuously until the last ID is reached, pausing during business hours in order not to interfere with normal operations.
