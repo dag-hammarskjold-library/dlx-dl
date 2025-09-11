@@ -59,7 +59,7 @@ def notify(*, topic_arn: str, phone_number=None, statuses: list[PendingStatus] =
     for status in statuses:
         minutes = int(status.pending_time / 60)
         message = message if message else 'Hello,'
-        message += f'\n\n{"Bib" if status.collection == 'bibs' else "Auth"} exports have been pending for more than {minutes} minutes.'
+        message += f'\n\n{"Bib" if status.collection == "bibs" else "Auth"} exports have been pending for more than {minutes} minutes.'
     
     if message:
         subject = f'UNDL exports pending: exports to UNDL have been pending for more than {minutes} minutes'
