@@ -1,5 +1,3 @@
-
-import inspect
 from datetime import datetime, timezone, timedelta
 from dlx import DB
 from dlx.marc import Marc, Bib, BibSet, Auth, AuthSet
@@ -16,7 +14,7 @@ def elapsed(since: datetime, until: datetime = datetime.now(timezone.utc)) -> ti
 # classes
 class PendingStatus():
     def __init__(self, *, connection_string: str = None, database: str = None, collection: str):
-        """Queries the logs and sets the following properties: since, ago, pending_time, pending_records"""
+        """Queries the logs and sets the following properties: pending_time, pending_records"""
 
         if connection_string:
             # Not required, because DB may already be connected to
