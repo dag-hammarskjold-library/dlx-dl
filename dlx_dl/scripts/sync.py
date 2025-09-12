@@ -151,7 +151,12 @@ def run(**kwargs) -> int:
             url += '&c=Authorities'
 
         if response := requests.get(url, headers=HEADERS):
-            root = ElementTree.fromstring(response.text)
+            try:
+                root = ElementTree.fromstring(response.text)
+            except:
+                print(f'Bad UNDL XML?\n{response.text}')
+                raise Exception(f'Invalid XML?\n{response.text}')
+
             col = root.find(f'{NS}collection')
             record_xml = col.find(f'{NS}record')
         else:
@@ -159,7 +164,12 @@ def run(**kwargs) -> int:
 
         # check if the record has been updated in DL yet
         flag = None 
-        last = Bib.from_xml(last_exported['xml'], auth_control=False)
+        
+        try:
+            last = Bib.from_xml(last_exported['xml'], auth_control=False)
+        except:
+            print(f'Bad XML in log data?\n{response.text}')
+            raise Exception(f'Invalid XML?\n{response.text}')
                             
         if 'DELETED' in (last.get_value('980', 'a'), last.get_value('980', 'c')):
             try:
