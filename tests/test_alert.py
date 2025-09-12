@@ -34,6 +34,9 @@ def db():
 
 @mock_aws
 def test_run(db):
+    from boto3 import client
+    ssm = client('ssm')
+    
     sys.argv[1:] = [
         '--connect', 'mongomock://localhost', 
         '--database', 'testing', 
