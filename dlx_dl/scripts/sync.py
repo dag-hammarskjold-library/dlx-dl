@@ -154,9 +154,8 @@ def run(**kwargs) -> int:
             try:
                 root = ElementTree.fromstring(response.text)
             except:
-                print(f'Bad UNDL XML?\n{response.text}')
                 response_text = "".join(re.split(r"(^\s+|\s+$)", response.text))
-                raise Exception(f'Invalid XML?\n{response_text}')
+                raise Exception(f'Invalid XML returend by UNDL: {response_text}')
 
             col = root.find(f'{NS}collection')
             record_xml = col.find(f'{NS}record')
@@ -169,8 +168,7 @@ def run(**kwargs) -> int:
         try:
             last = Bib.from_xml(last_exported['xml'], auth_control=False)
         except:
-            print(f'Bad XML in log data?\n{last_exported}')
-            raise Exception(f'Invalid XML?')
+            raise Exception(f'Invalid XML in log data: {last_exported}')
                             
         if 'DELETED' in (last.get_value('980', 'a'), last.get_value('980', 'c')):
             try:
@@ -810,7 +808,7 @@ def submit_to_dl(args, record, *, mode, export_start, export_type):
         'record_id': record.id, 
         'response_code': response.status_code, 
         'response_text': response.text.replace('\n', ''),
-        'xml': xml
+        'xml': re.sub(r'[\x00-\x19]', '', xml)
     }
 
     DB.handle[export.LOG_COLLECTION].insert_one(logdata)

@@ -613,7 +613,7 @@ def submit_to_dl(record, export_start, args):
         'record_id': record.id, 
         'response_code': response.status_code, 
         'response_text': response.text.replace('\n', ''),
-        'xml': xml
+        'xml': re.sub(r'[\x00-\x19]', '', xml)
     }
     
     return logdata
