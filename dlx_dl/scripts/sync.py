@@ -155,7 +155,8 @@ def run(**kwargs) -> int:
                 root = ElementTree.fromstring(response.text)
             except:
                 print(f'Bad UNDL XML?\n{response.text}')
-                raise Exception(f'Invalid XML?\n{"".join(re.split('(^\s+|\s+$)', response.text))}')
+                response_text = "".join(re.split(r"(^\s+|\s+$)", response.text))
+                raise Exception(f'Invalid XML?\n{response_text}')
 
             col = root.find(f'{NS}collection')
             record_xml = col.find(f'{NS}record')
