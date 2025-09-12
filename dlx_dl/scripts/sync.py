@@ -155,7 +155,8 @@ def run(**kwargs) -> int:
                 root = ElementTree.fromstring(response.text)
             except:
                 print(f'Bad UNDL XML?\n{response.text}')
-                raise Exception(f'Invalid XML?\n{response.text}')
+                response_text = "".join(re.split(r"(^\s+|\s+$)", response.text))
+                raise Exception(f'Invalid XML?\n{response_text}')
 
             col = root.find(f'{NS}collection')
             record_xml = col.find(f'{NS}record')
@@ -168,8 +169,8 @@ def run(**kwargs) -> int:
         try:
             last = Bib.from_xml(last_exported['xml'], auth_control=False)
         except:
-            print(f'Bad XML in log data?\n{response.text}')
-            raise Exception(f'Invalid XML?\n{response.text}')
+            print(f'Bad XML in log data?\n{last_exported}')
+            raise Exception(f'Invalid XML?')
                             
         if 'DELETED' in (last.get_value('980', 'a'), last.get_value('980', 'c')):
             try:
