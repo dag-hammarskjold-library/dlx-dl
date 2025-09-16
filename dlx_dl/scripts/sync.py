@@ -225,14 +225,14 @@ def run(**kwargs) -> int:
                     pass
                 elif flag == 'NEW':
                     # the record has been imported to DL but isn't searchable yet
-                    print(f'Awaiting search indexing of last new record: {last_exported['record_type']}# {last_exported["record_id"]}. Callback received indicating sucessful import @ {callback_data["time"]}.')
+                    print(f'Awaiting search indexing of last new record: {last_exported["record_type"]}# {last_exported["record_id"]}. Callback received indicating sucessful import @ {callback_data["time"]}.')
                     return -1
                 else:
                     # the record was exported and imported to DL succesfully, but DL did not record the update in
                     # the 005 field. this can happen if there were no changes to be made to the DL record.
-                    warn(f'Possible redundant export not recorded in DL: {flag} {last_exported['record_type']}# {last_exported["record_id"]}')
+                    warn(f'Possible redundant export not recorded in DL: {flag} {last_exported["record_type"]}# {last_exported["record_id"]}')
             else:
-                print(f'Last update not cleared in DL yet ({flag}) ({last_exported['record_type']}# {last_exported["record_id"]} @ {last_exported["time"]})')
+                print(f'Last update not cleared in DL yet ({flag}) ({last_exported["record_type"]}# {last_exported["record_id"]} @ {last_exported["time"]})')
                 return -1
 
     # cycle through records in batches 
