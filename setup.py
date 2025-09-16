@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 
 setup(
     name = 'dlx_dl',
-    version = '1.2.16',
+    version = '1.2.16.dev',
     url = 'http://github.com/dag-hammarskjold-library/dlx-dl',
     author = 'United Nations Dag Hammarskjöld Library',
     author_email = 'library-ny@un.org',
@@ -26,6 +26,7 @@ setup(
             'dlx-dl=dlx_dl.scripts.export:run', # to deprecate
             'dlx-dl-export=dlx_dl.scripts.export:run',
             'dlx-dl-sync=dlx_dl.scripts.sync:run'
+            'dlx-dl-alert=dlx_dl.scripts.alert:run'
         ]
     }
 )
