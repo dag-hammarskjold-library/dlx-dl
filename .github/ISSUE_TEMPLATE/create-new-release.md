@@ -10,4 +10,4 @@ assignees: ''
 - [ ] Ensure all other issues in the milestone have been closed or removed
 - [ ] Issue a PR updating the version to the new release version in setup.py
 - [ ] Create a new release, named by the version and creating a new tag with the same name
-- [ ] Issue a PR updating the version to the new dev version (`<version>.dev`) in setup.py, closing this issue
+- [ ] Issue a PR updating the README and setting the version to the new dev version (`<new version>.dev`) in setup.py, closing this issue
