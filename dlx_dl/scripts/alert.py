@@ -17,7 +17,7 @@ AP.add_argument('--connect')
 AP.add_argument('--database', default='undlFiles')
 AP.add_argument('--pending_time', required=True, type=int, help='Send alert if records have been pending more than this number of seconds')
 AP.add_argument('--alert_frequency', type=int, default=21600, help='Skip alert if last alert was within this number of seconds')
-mg = AP.add_mutually_exclusive_group(required=True)
+mg = AP.add_mutually_exclusive_group()
 mg.add_argument('--topic_arn', help='AWS SNS topic ARN')
 mg.add_argument('--phone_number', help='AWS SNS topic phone number')
 
