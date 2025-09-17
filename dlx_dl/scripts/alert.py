@@ -23,7 +23,9 @@ mg.add_argument('--phone_number', help='AWS SNS topic phone number')
 
 def run() -> dict:
     args = AP.parse_args()
+    # Default args - assign them here so that the code can compile withinut conecting to SSM
     args.connect = args.connect or param('prodISSU-admin-connect-string')
+    args.topic_arn = args.topic_arn or param('dlx-dl-notifications-topicARN')
     DB.connect(args.connect, database=args.database) if DB.connected is False else None # if testing, already connected to DB
     statuses = []
 
@@ -66,7 +68,7 @@ def run() -> dict:
     print(f'No exports pending for longer than the set time ({args.pending_time})')
     return
 
-def notify(*, topic_arn: str, phone_number=None, statuses: list[PendingStatus] = []) -> dict:
+def notify(*, topic_arn: str = None, phone_number: str = None, statuses: list[PendingStatus] = []) -> dict:
     if not statuses:
         return 
     
@@ -80,7 +82,7 @@ def notify(*, topic_arn: str, phone_number=None, statuses: list[PendingStatus] =
         message = message or 'Hello,'
         message += f'\n\n{"Bib" if status.collection == "bibs" else "Auth"} exports have been pending for more than {minutes} minutes.'
     
-    print('Sending message: "{message}"')
+    print(f'Sending{" to Topic ]" + topic_arn.split(":")[-1] if topic_arn else phone_number}: "{message}"')
     subject = f'UNDL exports pending: exports to UNDL have been pending for more than {max_minutes} minutes'
     message += '\n\nSee https://cloudwatch.amazonaws.com/dashboard.html?dashboard=DLX-DL&context=eyJSIjoidXMtZWFzdC0xIiwiRCI6ImN3LWRiLTk1MDIzNjUzNzk0OSIsIlUiOiJ1cy1lYXN0LTFfb256a1pUMmphIiwiQyI6IjZycXFqbm1mZzc2c3RyZzc3ZTZiZW1pbmZzIiwiSSI6InVzLWVhc3QtMTpmMjZiMzkxOC1lNDBjLTQwNzktODIyMy0zZWEzMDViZjA2N2IiLCJPIjoiYXJuOmF3czppYW06Ojk1MDIzNjUzNzk0OTpyb2xlL3NlcnZpY2Utcm9sZS9DV0RCU2hhcmluZy1QdWJsaWNSZWFkT25seUFjY2Vzcy1LNEFMMExLUyIsIk0iOiJQdWJsaWMifQ%3D%3D&start=PT12H&end=null#dashboards:'
     
