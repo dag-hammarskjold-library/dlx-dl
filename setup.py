@@ -25,7 +25,7 @@ setup(
         'console_scripts': [
             'dlx-dl=dlx_dl.scripts.export:run', # to deprecate
             'dlx-dl-export=dlx_dl.scripts.export:run',
-            'dlx-dl-sync=dlx_dl.scripts.sync:run'
+            'dlx-dl-sync=dlx_dl.scripts.sync:run',
             'dlx-dl-alert=dlx_dl.scripts.alert:run'
         ]
     }
