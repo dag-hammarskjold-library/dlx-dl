@@ -1,7 +1,7 @@
 
 ### Installation 
 ```bash
-pip install git+https://github.com/dag-hammarskjold-library/dlx-dl@v1.2.16
+pip install git+https://github.com/dag-hammarskjold-library/dlx-dl@v1.2.17
 ```
 
 ### Usage
@@ -64,4 +64,5 @@ $ dlx-dl-export --source=export_id --type=bib --ids 1 2 3 --xml=output.xml
 #### other scripts
 
 https://github.com/dag-hammarskjold-library/dlx-dl/blob/main/dlx_dl/scripts
+
 
