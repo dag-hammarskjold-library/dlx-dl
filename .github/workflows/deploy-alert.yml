@@ -67,4 +67,4 @@ jobs:
             
             aws events put-targets \
             --rule dlx-dl-alert-run \
-            --targets '[{"Id":"1","Arn":"arn:aws:lambda:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:function:dlx-dl-alert","Input":"{\"source\":\"dlx-dl-alert\"}]'
+            --targets '[{"Id":"1","Arn":"arn:aws:lambda:us-east-1:950236537949:function:dlx-dl-alert","Input":"{\"source\":\"dlx-dl-alert\"}"}]''
