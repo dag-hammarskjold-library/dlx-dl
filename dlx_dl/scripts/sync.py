@@ -127,7 +127,7 @@ def run(**kwargs) -> int:
         pass
     else:
         to_check = 50
-        last_n = list(DB.handle[export.LOG_COLLECTION].find({'source': args.source, 'record_type': args.type}, sort=[('time', -1)], limit=to_check)) or []
+        last_n = list(DB.handle[export.LOG_COLLECTION].find({'source': args.source}, sort=[('time', -1)], limit=to_check)) or []
 
         if not last_n:
             raise Exception('No log data found for this source. Run with --force to skip this check')
@@ -144,14 +144,20 @@ def run(**kwargs) -> int:
             last_exported = last_new
 
         # use DL search API to find the record in DL
-        pre = '035__a:(DHL)' if args.type == 'bib' else '035__a:(DHLAUTH)'
+        pre = '035__a:(DHL)' if last_exported['record_type'] == 'bib' else '035__a:(DHLAUTH)'
         url = f'{API_SEARCH_URL}?search_id=&p={pre}{last_exported["record_id"]}&format=xml'
 
-        if args.type == 'auth':
+        if last_exported['record_type'] == 'auth':
             url += '&c=Authorities'
 
         if response := requests.get(url, headers=HEADERS):
-            root = ElementTree.fromstring(response.text)
+            try:
+                root = ElementTree.fromstring(response.text)
+            except:
+                print(f'Bad UNDL XML?\n{response.text}')
+                response_text = "".join(re.split(r"(^\s+|\s+$)", response.text))
+                raise Exception(f'Invalid XML?\n{response_text}')
+
             col = root.find(f'{NS}collection')
             record_xml = col.find(f'{NS}record')
         else:
@@ -159,7 +165,12 @@ def run(**kwargs) -> int:
 
         # check if the record has been updated in DL yet
         flag = None 
-        last = Bib.from_xml(last_exported['xml'], auth_control=False)
+        
+        try:
+            last = Bib.from_xml(last_exported['xml'], auth_control=False)
+        except:
+            print(f'Bad XML in log data?\n{last_exported}')
+            raise Exception(f'Invalid XML?')
                             
         if 'DELETED' in (last.get_value('980', 'a'), last.get_value('980', 'c')):
             try:
@@ -214,14 +225,14 @@ def run(**kwargs) -> int:
                     pass
                 elif flag == 'NEW':
                     # the record has been imported to DL but isn't searchable yet
-                    print(f'Awaiting search indexing of last new record: {args.type}# {last_exported["record_id"]}. Callback received indicating sucessful import @ {callback_data["time"]}.')
+                    print(f'Awaiting search indexing of last new record: {last_exported["record_type"]}# {last_exported["record_id"]}. Callback received indicating sucessful import @ {callback_data["time"]}.')
                     return -1
                 else:
                     # the record was exported and imported to DL succesfully, but DL did not record the update in
                     # the 005 field. this can happen if there were no changes to be made to the DL record.
-                    warn(f'Possible redundant export not recorded in DL: {flag} {args.type}# {last_exported["record_id"]}')
+                    warn(f'Possible redundant export not recorded in DL: {flag} {last_exported["record_type"]}# {last_exported["record_id"]}')
             else:
-                print(f'Last update not cleared in DL yet ({flag}) ({args.type}# {last_exported["record_id"]} @ {last_exported["time"]})')
+                print(f'Last update not cleared in DL yet ({flag}) ({last_exported["record_type"]}# {last_exported["record_id"]} @ {last_exported["time"]})')
                 return -1
 
     # cycle through records in batches 
@@ -277,8 +288,8 @@ def run(**kwargs) -> int:
             col = root.find(f'{NS}collection')
         
             # process DL XML
-            for r in [] if col is None else col:
-                dl_record = Bib.from_xml_raw(r, auth_control=False, delete_subfield_zero=False)
+            for r in col or []:
+                dl_record = Bib.from_xml_raw(r, auth_control=False, delete_subfield_zero=False) # doesn't matter if Bib or Auth
                 _035 = next(filter(lambda x: re.match(r'^\(DHL', x), dl_record.get_values('035', 'a')), '')
 
                 if match := re.match(r'^\((DHL|DHLAUTH)\)(.*)', _035):
