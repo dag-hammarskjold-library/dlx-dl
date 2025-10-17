@@ -110,6 +110,3 @@ def notify(*, topic_arn: str = None, phone_number: str = None, statuses: list[Pe
 if __name__ == '__main__':
     # The file is being run by the Python interpreter as a script
     run()
-elif not sys.argv[1:]:
-    # The function is being imported from another script or module
-    raise Exception('Arguments must be provided through sys.argv')
