@@ -62,14 +62,14 @@ jobs:
           run: |
             aws events put-rule \
             --name dlx-dl-lambda-bib \
-            --schedule-expression "cron(0/10 * * ? *)"
+            --schedule-expression "cron(0/10 * * * ? *)"
             aws events put-targets \
             --rule dlx-dl-lambda-bib \
             --targets '[{"Id":"1","Arn":"${{ secrets.FUNCTION_ARN }}","Input":"{\"source\":\"dlx-dl-lambda\",\"type\":\"bib\",\"modified_within\":86400,\"queue\":true}"}]'
 
             aws events put-rule \
             --name dlx-dl-lambda-auth \
-            --schedule-expression "cron(0/10 * * ? *)"
+            --schedule-expression "cron(0/10 * * * ? *)"
             aws events put-targets \
             --rule dlx-dl-lambda-auth \
             --targets '[{"Id":"1","Arn":"${{ secrets.FUNCTION_ARN }}","Input":"{\"source\":\"dlx-dl-lambda\",\"type\":\"auth\",\"modified_within\":86400,\"queue\":true}"}]'
