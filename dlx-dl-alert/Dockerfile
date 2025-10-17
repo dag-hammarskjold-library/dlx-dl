@@ -1,11 +1,10 @@
-FROM public.ecr.aws/lambda/python:3.11
+FROM public.ecr.aws/lambda/python:3.12
 
 # Copy requirements.txt
 COPY requirements.txt ${LAMBDA_TASK_ROOT}
 
 # Install git
-RUN yum install -y openssl-devel-1.0.2k-24.amzn2.0.15
-RUN yum install -y git-all
+RUN dnf install -y git-all
 
 # Install the specified packages
 RUN pip install -r requirements.txt
