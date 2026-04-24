@@ -260,4 +260,39 @@ def test_sync(db, capsys, mock_get_post):
     data = list(filter(None, capsys.readouterr().out.split('\n')))
     assert DB.handle['dlx_dl_log'].find_one({'record_id': bib.id})
     
+def test_batch_size(db, capsys, mock_post):
+    from dlx import DB
+    from xmldiff.main import diff_texts
+
+    DB.handle['dlx_dl_log'].drop()
+
+    # batch_size=1 with 2 records should produce 2 separate POST calls
+    export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x', batch=True, batch_size=1, email='test@example.com')
+
+    assert len(mock_post.calls) == 2
+
+    out = capsys.readouterr().out
+    assert 'Submitting batch 1 (1 records)' in out
+    assert 'Submitting batch 2 (1 records)' in out
+
+    # each POST body should be a valid <collection> with exactly one record
+    for call in mock_post.calls:
+        body = call.request.body.decode('utf-8')
+        assert body.startswith('<collection>')
+        assert body.endswith('</collection>')
+        assert body.count('<record>') == 1
+
+def test_batch_size_larger_than_set(db, capsys, mock_post):
+    from dlx import DB
+
+    DB.handle['dlx_dl_log'].drop()
+
+    # batch_size larger than record count should produce one POST call
+    export.run(connect=db, source='test', type='bib', modified_within=100, use_api=True, api_key='x', batch=True, batch_size=100, email='test@example.com')
+
+    assert len(mock_post.calls) == 1
+
+    out = capsys.readouterr().out
+    assert 'Submitting batch 1 (2 records)' in out
+
 ### end
