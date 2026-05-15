@@ -6,13 +6,14 @@ from urllib.parse import urlparse, urlunparse, quote, unquote
 from datetime import datetime, timezone, timedelta
 from argparse import ArgumentParser
 from dlx import DB, Config
-from dlx.marc import Bib, BibSet, Auth, AuthSet, Datafield
+from dlx.marc import Query, Bib, BibSet, Auth, AuthSet, Datafield
 from dlx.file import File, Identifier
 from pymongo import MongoClient, DESCENDING
 from mongomock import MongoClient as MockClient
 from bson import SON
 
-API_URL = 'https://digitallibrary.un.org/api/v1/record/'
+#API_URL = 'https://digitallibrary.un.org/api/v1/record/'
+API_URL = 'https://undltest.tind.io/api/v1/record/'
 LOG_COLLECTION = 'dlx_dl_log'
 QUEUE_COLLECTION = 'dlx_dl_queue'
 CALLBACK_COLLECTION = 'undl_callback_log'
@@ -52,6 +53,7 @@ def get_args(**kwargs):
     parser.add_argument('--delete_only', action='store_true', help='only export records to delete')
     parser.add_argument('--queue', help='number of records at which to limit export and place in queue')
     parser.add_argument('--batch', action='store_true', help='write records to API as batch')
+    parser.add_argument('--batch_size', type=int, help='number of records per batch submission (requires --batch)')
     parser.add_argument('--email', help='receive batch results by email instead of callback')
     
     r = parser.add_argument_group('required')
@@ -66,6 +68,7 @@ def get_args(**kwargs):
     qm.add_argument('--id', help='a single record ID')
     qm.add_argument('--ids', nargs='+', help='variable-length list of record IDs')
     qm.add_argument('--query', help='JSON MongoDB query')
+    qm.add_argument('--querystring', help='dlx querystring syntax (e.g. 999:abc*)')
 
     o = parser.add_argument_group('output', description='one output argument is required')
     om = o.add_mutually_exclusive_group(required=True)
@@ -125,13 +128,16 @@ def run(**kwargs):
     records = get_records(args, log, queue)
         
     ### write
-    
+
     out = output_handle(args)
     export_start = START
     seen = []
-    
+    batch_size = args.batch_size if args.batch_size else None
+    batch_buffer = []
+    batch_num = 0
+
     out.write('<collection>')
-    
+
     for record in records:
         if record.id in seen:
             continue
@@ -139,23 +145,23 @@ def run(**kwargs):
         if args.type == 'bib':
             if record.get_value('245', 'a')[0:16].lower() == 'work in progress':
                 continue
-            
+
             record = process_bib(record, blacklisted=blacklisted, files_only=args.files_only)
-            
+
             if args.files_only and not record.get_fields('FFT'):
                 print(f'[{record.id}] No files detected')
                 continue
-                
+
         elif args.type == 'auth':
             record = process_auth(record)
-        
+
         # clean
-        
+
         skip_and_add_to_queue = False
-        
+
         for field in record.datafields:
             for sub in field.subfields:
-                if hasattr(sub, 'xref') and sub.value is None:            
+                if hasattr(sub, 'xref') and sub.value is None:
                     # the xref auth is not in the system yet
                     skip_and_add_to_queue = True
                 elif not hasattr(sub, 'xref'):
@@ -163,7 +169,7 @@ def run(**kwargs):
                         sub.value.replace('-', '_')
                     elif sub.value == '' or re.match(r'^\s+$', sub.value):
                         field.subfields.remove(sub)
-                        
+
             if len(field.subfields) == 0:
                 record.fields.remove(field)
 
@@ -172,35 +178,47 @@ def run(**kwargs):
                 queue.insert_one(
                     {'time': datetime.now(timezone.utc), 'source': args.source, 'type': args.type, 'record_id': record.id}
                 )
-            
+
             continue
-            
+
         # export
         xml = record.to_xml(xref_prefix='(DHLAUTH)', write_id=False)
-        
+
         if args.use_api:
             if args.batch:
-                pass
-            else:    
+                if batch_size:
+                    batch_buffer.append(xml)
+                    if len(batch_buffer) >= batch_size:
+                        batch_num += 1
+                        print(f'Submitting batch {batch_num} ({len(batch_buffer)} records)')
+                        submit_batch('<collection>' + ''.join(batch_buffer) + '</collection>', args)
+                        batch_buffer = []
+            else:
                 logdata = submit_to_dl(record, export_start, args)
-                queue.delete_many({'type': args.type, 'record_id': record.id})     
+                queue.delete_many({'type': args.type, 'record_id': record.id})
                 log.insert_one(logdata)
-            
+
                 # clean for JSON serialization
                 logdata.pop('_id', None) # pymongo adds the _id key to the dict on insert??
                 logdata['export_start'] = str(logdata['export_start'])
                 logdata['time'] = str(logdata['time'])
                 print(json.dumps(logdata))
-            
+
                 queue.delete_many({'type': args.type, 'record_id': record.id})
-        
+
         seen.append(record.id)
         out.write(xml)
 
     out.write('</collection>')
-    
+
     if args.use_api and args.batch:
-        submit_batch(out.getvalue(), args)
+        if batch_size:
+            if batch_buffer:
+                batch_num += 1
+                print(f'Submitting batch {batch_num} ({len(batch_buffer)} records)')
+                submit_batch('<collection>' + ''.join(batch_buffer) + '</collection>', args)
+        else:
+            submit_batch(out.getvalue(), args)
 
     if args.use_api:
         log.insert_one({'source': args.source, 'record_type': args.type, 'export_start': export_start, 'export_end': datetime.now(timezone.utc)})
@@ -238,6 +256,8 @@ def get_records(args, log, queue):
     elif args.query:
         query = args.query.replace('\'', '"')
         records = cls.from_query(json.loads(query))
+    elif args.querystring:
+        records = cls.from_query(Query.from_string(args.querystring, record_type=args.type))
     else:
         raise Exception('One of the criteria arguments is required')
         

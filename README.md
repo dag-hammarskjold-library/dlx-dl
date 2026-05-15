@@ -61,6 +61,43 @@ $ dlx-dl-export --source=export_id --type=bib --list=ids.txt --use_api
 $ dlx-dl-export --source=export_id --type=bib --ids 1 2 3 --xml=output.xml
 ```
 
+#### Batch API submission
+
+The `--batch` flag submits all matching records to the UNDL API in a single request instead of one record at a time. Results are delivered by email rather than a per-record callback URL, so `--email` is required.
+
+```bash
+$ dlx-dl-export --source=export_id --type=bib --modified_within=86400 --use_api --batch --email=you@example.com
+```
+
+The `--batch_size` option (used together with `--batch`) splits the records into chunks and submits each chunk as a separate API request. This avoids creating a single oversized payload when a large number of records have been updated.
+
+```bash
+# Submit records in chunks of 500
+$ dlx-dl-export --source=export_id --type=bib --modified_within=86400 --use_api --batch --batch_size=500 --email=you@example.com
+```
+
+Progress is printed to STDOUT as each chunk is submitted:
+
+```
+Submitting batch 1 (500 records)
+Submitting batch 2 (500 records)
+Submitting batch 3 (243 records)
+```
+
+The same options are available when calling `export.run()` from Python:
+
+```python
+export.run(
+    source='export_id',
+    type='bib',
+    modified_within=86400,
+    use_api=True,
+    batch=True,
+    batch_size=500,
+    email='you@example.com',
+)
+```
+
 #### other scripts
 
 https://github.com/dag-hammarskjold-library/dlx-dl/blob/main/dlx_dl/scripts
