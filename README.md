@@ -26,6 +26,23 @@ sync.run(help=True)
 * These scripts can be run from the command line for ad hoc operations, or as Python functions for use in scripts or AWS Lambda.
 * When submitting records to DL using the API, the result is printed to STDOUT.
 * Only exports using the API are logged in the database
+ 
+### Credentials
+Starting with dlx v1.6.0, it is possible to use temporary AWS credentials rather than saving static AWS access keys in your environment. To use temporary credentials, run:
+```bash
+aws login
+```
+
+You'll see the following in your console:
+```
+Attempting to open your default browser. If the browser does not open, open the following URL.
+If you are unable to open the URL on this device, run this command again with the '--remote' option.
+```
+
+Complete the sign-in in your browser, and note the message in your console indicating the profile and credentials applied:
+```
+Updated profile <profile> to use arn:aws:iam::<account>:<user> credentials.
+```
 
 #### Running as Python function
 
