@@ -1,3 +1,1 @@
-dlx @ git+https://github.com/dag-hammarskjold-library/dlx@v1.5.8
-boto3[crt]>=1.43.35
-botocore[crt]>=1.43.35
+dlx @ git+https://github.com/dag-hammarskjold-library/dlx@v1.6.0
