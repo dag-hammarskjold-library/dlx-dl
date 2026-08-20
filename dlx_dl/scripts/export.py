@@ -74,7 +74,8 @@ def get_args(**kwargs):
     om.add_argument('--use_api', '--api', action='store_true', help='submit records to DL through the API (boolean)')
     
     # get from AWS if not provided
-    ssm = boto3.client('ssm', region_name='us-east-1')
+    session = boto3.Session()
+    ssm = session.client("ssm")
     
     def param(name):
         return None if os.environ.get('DLX_DL_TESTING') else ssm.get_parameter(Name=name)['Parameter']['Value'] 
@@ -551,7 +552,7 @@ def _new_file_uris(date_from: datetime, date_to=None) -> list:
     
 def _fft_from_files(bib):
     symbols = bib.get_values('191', 'a') + bib.get_values('191', 'z')
-    
+
     seen = []
     
     for symbol in set(symbols):
